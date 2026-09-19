@@ -1,0 +1,263 @@
+/* Teeju theme — forest green, maroon, beige & black */
+
+/* Craze by Pian45 Studio — free for personal use only.
+   Buy a commercial licence (pian45.gumroad.com) before a public/business launch. */
+@font-face {
+  font-family: 'Craze';
+  src: url('./assets/fonts/Craze-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --green-950: #0c1f16;
+  --green-900: #10271c;
+  --green-800: #173b2f;
+  --green-700: #234b3a;
+  --green-600: #315442;
+
+  --maroon-800: #5c1626;
+  --maroon-700: #6b1e2d;
+  --maroon-600: #7a263a;
+  --maroon-500: #80384a;
+
+  --beige-400: #d8c7ac;
+  --beige-300: #e8dcc8;
+  --beige-200: #f3ebdd;
+  --beige-100: #f7f2e9;
+  --paper: #fbf8f2;
+
+  --ink-900: #111111;
+  --ink-800: #202020;
+  --ink-700: #292524;
+  --ink-500: #5e5a55;
+  --ink-400: #7c766d;
+
+  --line: #e6dccb;
+  --line-strong: #d6c8af;
+
+  --font-display: 'Craze', 'Arial Black', Impact, sans-serif;
+  --font-sans: 'Inter', system-ui, 'Segoe UI', sans-serif;
+
+  --shadow-sm: 0 1px 2px rgba(17, 17, 17, 0.05);
+  --shadow-lg: 0 18px 40px -12px rgba(16, 39, 28, 0.25), 0 4px 10px -4px rgba(16, 39, 28, 0.12);
+
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-800);
+  background: var(--beige-100);
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--beige-100);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--maroon-700);
+  color: var(--beige-200);
+}
+
+:focus-visible {
+  outline: 2px solid var(--maroon-600);
+  outline-offset: 2px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Brand */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.brand__mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--maroon-700);
+  color: var(--beige-200);
+  font-family: var(--font-display);
+  letter-spacing: 0.035em;
+  font-size: 20px;
+  line-height: 1;
+  padding-bottom: 2px;
+}
+
+.brand__name {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  color: var(--ink-900);
+}
+
+.brand--light .brand__name {
+  color: var(--beige-200);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+.btn--primary {
+  background: var(--green-800);
+  color: var(--beige-200);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--green-900);
+}
+
+.btn--block {
+  width: 100%;
+  height: 50px;
+  font-size: 15px;
+}
+
+.btn__arrow {
+  transition: transform 0.2s ease;
+}
+
+.btn:hover .btn__arrow {
+  transform: translateX(3px);
+}
+
+/* Alerts */
+.alert {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  border: 1px solid;
+}
+
+.alert--error {
+  background: rgba(107, 30, 45, 0.06);
+  border-color: rgba(107, 30, 45, 0.22);
+  color: var(--maroon-700);
+}
+
+.alert--success {
+  background: rgba(35, 75, 58, 0.07);
+  border-color: rgba(35, 75, 58, 0.22);
+  color: var(--green-800);
+}
+
+/* Supabase connection indicator */
+.conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.conn__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-400);
+}
+
+.conn--connected .conn__dot {
+  background: #3f8a63;
+  box-shadow: 0 0 0 3px rgba(63, 138, 99, 0.18);
+}
+
+.conn--error .conn__dot {
+  background: #b0485e;
+  box-shadow: 0 0 0 3px rgba(176, 72, 94, 0.2);
+}
