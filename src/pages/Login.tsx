@@ -5,18 +5,13 @@ import BrandMark from '../components/BrandMark'
 import ConnectionStatus from '../components/ConnectionStatus'
 import './Login.css'
 
-type Mode = 'signin' | 'signup' | 'forgot' | 'update'
+type Mode = 'signin' | 'forgot' | 'update'
 
 const COPY: Record<Mode, { title: string; subtitle: string; cta: string }> = {
   signin: {
     title: 'Welcome back',
     subtitle: 'Sign in to continue to your dashboard.',
     cta: 'Sign in',
-  },
-  signup: {
-    title: 'Create your account',
-    subtitle: 'It takes less than a minute to get started.',
-    cta: 'Create account',
   },
   forgot: {
     title: 'Reset your password',
@@ -37,7 +32,6 @@ interface LoginProps {
 
 export default function Login({ initialMode = 'signin', onPasswordUpdated }: LoginProps) {
   const [mode, setMode] = useState<Mode>(initialMode)
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -67,22 +61,6 @@ export default function Login({ initialMode = 'signin', onPasswordUpdated }: Log
       if (mode === 'signin') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-      } else if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: name.trim() },
-            emailRedirectTo: window.location.origin,
-          },
-        })
-        if (error) throw error
-        // No session means email confirmation is switched on in Supabase
-        if (!data.session) {
-          setMode('signin')
-          setPassword('')
-          setNotice(`We’ve sent a confirmation link to ${email}. Open it to activate your account, then sign in.`)
-        }
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: window.location.origin,
@@ -154,22 +132,6 @@ export default function Login({ initialMode = 'signin', onPasswordUpdated }: Log
               </div>
             )}
 
-            {mode === 'signup' && (
-              <div className="field">
-                <label htmlFor="name">Full name</label>
-                <input
-                  id="name"
-                  className="input"
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
             {needsEmail && (
               <div className="field">
                 <label htmlFor="email">Email address</label>
@@ -232,32 +194,14 @@ export default function Login({ initialMode = 'signin', onPasswordUpdated }: Log
             </button>
           </form>
 
-          <p className="auth-switch">
-            {mode === 'signin' && (
-              <>
-                New to Teeju?{' '}
-                <button type="button" className="link" onClick={() => switchMode('signup')}>
-                  Create an account
-                </button>
-              </>
-            )}
-            {mode === 'signup' && (
-              <>
-                Already have an account?{' '}
-                <button type="button" className="link" onClick={() => switchMode('signin')}>
-                  Sign in
-                </button>
-              </>
-            )}
-            {mode === 'forgot' && (
-              <>
-                Remembered it?{' '}
-                <button type="button" className="link" onClick={() => switchMode('signin')}>
-                  Back to sign in
-                </button>
-              </>
-            )}
-          </p>
+          {mode === 'forgot' && (
+            <p className="auth-switch">
+              Remembered it?{' '}
+              <button type="button" className="link" onClick={() => switchMode('signin')}>
+                Back to sign in
+              </button>
+            </p>
+          )}
         </div>
 
         <footer className="auth-footer">

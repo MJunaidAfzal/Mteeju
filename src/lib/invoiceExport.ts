@@ -1,7 +1,10 @@
-// Download an invoice as PDF (through the browser's print dialog), PNG or a standalone HTML file.
+// Download an invoice as PDF, PNG or a standalone HTML file, or send it to the printer.
 import { toPng } from 'html-to-image'
+import { jsPDF } from 'jspdf'
 import invoiceCss from '../components/InvoiceDocument.css?raw'
 import type { Invoice } from './invoices'
+
+const A4 = { width: 210, height: 297 }
 
 export function fileName(invoice: Invoice, extension: string) {
   const parts = [invoice.number, invoice.client.name].filter(Boolean).join('-')
@@ -16,20 +19,47 @@ function save(href: string, name: string) {
   link.click()
 }
 
-/** Opens the print dialog, where "Save as PDF" produces a true A4 PDF with selectable text. */
+function snapshot(node: HTMLElement) {
+  // Use the invoice's own paper colour — a fixed white here would cover dark designs
+  const own = getComputedStyle(node).backgroundColor
+  const paper = own && own !== 'transparent' && !own.startsWith('rgba(0, 0, 0, 0') ? own : '#ffffff'
+  return toPng(node, {
+    pixelRatio: 2,
+    backgroundColor: paper,
+    width: node.offsetWidth,
+    height: node.offsetHeight,
+    style: { margin: '0' },
+  })
+}
+
+/**
+ * Builds the PDF from a picture of the invoice, so it looks exactly like the preview —
+ * dark designs included, whatever the browser's print settings are.
+ */
+export async function downloadPdf(node: HTMLElement, invoice: Invoice) {
+  const dataUrl = await snapshot(node)
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
+  const { width, height } = pdf.getImageProperties(dataUrl)
+  const pageHeight = (A4.width * height) / width
+
+  pdf.addImage(dataUrl, 'PNG', 0, 0, A4.width, pageHeight, undefined, 'FAST')
+  // Long invoices continue on further pages
+  let printed = A4.height
+  while (printed < pageHeight - 1) {
+    pdf.addPage()
+    pdf.addImage(dataUrl, 'PNG', 0, -printed, A4.width, pageHeight, undefined, 'FAST')
+    printed += A4.height
+  }
+  pdf.save(fileName(invoice, 'pdf'))
+}
+
+/** The browser's own print window: sharp, selectable text (dark designs need "Background graphics" ticked). */
 export function printInvoice() {
   window.print()
 }
 
 export async function downloadPng(node: HTMLElement, invoice: Invoice) {
-  const dataUrl = await toPng(node, {
-    pixelRatio: 2,
-    backgroundColor: '#ffffff',
-    width: node.offsetWidth,
-    height: node.offsetHeight,
-    style: { margin: '0' },
-  })
-  save(dataUrl, fileName(invoice, 'png'))
+  save(await snapshot(node), fileName(invoice, 'png'))
 }
 
 export function downloadHtml(node: HTMLElement, invoice: Invoice) {

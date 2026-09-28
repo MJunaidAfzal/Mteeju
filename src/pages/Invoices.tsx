@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import InvoiceDocument from '../components/InvoiceDocument'
 import { SetupRequiredError } from '../lib/apiStore'
-import { downloadHtml, downloadPng, printInvoice } from '../lib/invoiceExport'
+import { downloadHtml, downloadPdf, downloadPng, printInvoice } from '../lib/invoiceExport'
 import {
   CURRENCIES,
   DEFAULT_SETTINGS,
@@ -206,14 +206,15 @@ export default function Invoices() {
 
   const documentInvoice = draft ?? exportTarget
 
-  // A PDF/PNG/HTML download asked for from the list: render it off-screen first, then export
+  // A download asked for from the list: render the invoice off-screen first, then save the PDF
   useEffect(() => {
     if (!exportTarget || draft) return
+    const invoice = exportTarget
     const id = window.setTimeout(() => {
-      printInvoice()
-      setExportTarget(null)
-    }, 120)
+      void exportAs('pdf', invoice).finally(() => setExportTarget(null))
+    }, 150)
     return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exportTarget, draft])
 
   const totals = draft ? calcTotals(draft) : null
@@ -316,13 +317,14 @@ export default function Invoices() {
     }
   }
 
-  async function exportAs(kind: 'png' | 'html') {
+  async function exportAs(kind: 'pdf' | 'png' | 'html', invoice: Invoice | null = documentInvoice) {
     const node = exportRef.current
-    if (!node || !documentInvoice) return
+    if (!node || !invoice) return
     setBusyExport(kind)
     try {
-      if (kind === 'png') await downloadPng(node, documentInvoice)
-      else downloadHtml(node, documentInvoice)
+      if (kind === 'pdf') await downloadPdf(node, invoice)
+      else if (kind === 'png') await downloadPng(node, invoice)
+      else downloadHtml(node, invoice)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'The download failed.')
     } finally {
@@ -655,8 +657,11 @@ export default function Invoices() {
             <div className="inv-preview__bar">
               <p className="card__title">Live preview</p>
               <div className="inv-downloads">
-                <button type="button" className="btn btn--primary btn--sm" onClick={printInvoice}>
-                  <Printer size={14} /> PDF
+                <button type="button" className="btn btn--primary btn--sm" onClick={() => void exportAs('pdf')} disabled={busyExport === 'pdf'}>
+                  {busyExport === 'pdf' ? <Loader2 size={14} className="spin" /> : <Download size={14} />} PDF
+                </button>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={printInvoice} title="Opens the browser print window">
+                  <Printer size={14} /> Print
                 </button>
                 <button type="button" className="btn btn--secondary btn--sm" onClick={() => void exportAs('png')} disabled={busyExport === 'png'}>
                   {busyExport === 'png' ? <Loader2 size={14} className="spin" /> : <ImageIcon size={14} />} PNG
@@ -671,7 +676,10 @@ export default function Invoices() {
                 <InvoiceDocument invoice={draft} />
               </div>
             </div>
-            <p className="api-hint">PDF opens your browser's print window — choose "Save as PDF" for an A4 file with selectable text.</p>
+            <p className="api-hint">
+              PDF saves an A4 file that looks exactly like this preview. Print opens the browser print window (for dark designs tick “Background
+              graphics” there).
+            </p>
           </aside>
         </div>
         {exportPortal}
