@@ -7,6 +7,7 @@ import ConnectionStatus from '../components/ConnectionStatus'
 import Overview from './Overview'
 import Apis from './Apis'
 import Invoices from './Invoices'
+import Assistant from '../components/Assistant'
 import './Dashboard.css'
 
 type SectionId = 'dashboard' | 'apis' | 'invoices'
@@ -178,6 +179,8 @@ export default function Dashboard({ session }: { session: Session }) {
         <main className="dash-content">
           {active === 'apis' ? <Apis user={user} /> : active === 'invoices' ? <Invoices /> : <Overview name={name} />}
         </main>
+
+        <Assistant userName={name} onNavigate={(page) => go(page)} />
 
         <footer className="dash-footer">
           <span>© {new Date().getFullYear()} Teeju</span>
