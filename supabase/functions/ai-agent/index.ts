@@ -17,10 +17,14 @@ const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
 const API = 'https://generativelanguage.googleapis.com/v1beta'
-// Newest capable Flash model first; the list is only a preference — what the key can use wins
+// Newest capable Flash model first; a busy one falls through to the next
 const PREFERRED = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash']
+const RETRIES_PER_MODEL = 3
+const BUSY_STATUS = new Set([429, 500, 502, 503, 504])
 
-let cachedModel: string | null = null
+let cachedModels: string[] | null = null
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function availableModels(key: string): Promise<string[]> {
   const res = await fetch(`${API}/models?key=${key}`)
@@ -31,20 +35,21 @@ async function availableModels(key: string): Promise<string[]> {
     .map((m: { name: string }) => m.name.replace(/^models\//, ''))
 }
 
-async function pickModel(key: string): Promise<string> {
-  const forced = Deno.env.get('GEMINI_MODEL')
-  if (forced) return forced
-  if (cachedModel) return cachedModel
-  const names = await availableModels(key)
-  const flash = names.filter((n) => n.includes('flash') && !n.includes('preview') && !n.includes('exp'))
-  cachedModel =
-    PREFERRED.find((p) => names.includes(p)) ??
-    flash.find((n) => !n.includes('lite')) ??
-    flash[0] ??
-    names[0] ??
-    PREFERRED[0]
-  return cachedModel
+/** The models to try, best first. A pinned GEMINI_MODEL goes first, then the rest as backups. */
+async function modelChain(key: string): Promise<string[]> {
+  const pinned = Deno.env.get('GEMINI_MODEL')
+  if (!cachedModels) {
+    const names = await availableModels(key)
+    const flash = names.filter((n) => n.includes('flash') && !n.includes('preview') && !n.includes('exp'))
+    const ordered = [...PREFERRED.filter((p) => names.includes(p)), ...flash.filter((f) => !PREFERRED.includes(f))]
+    cachedModels = ordered.length > 0 ? ordered : PREFERRED
+  }
+  const chain = pinned ? [pinned, ...cachedModels.filter((m) => m !== pinned)] : [...cachedModels]
+  return chain.slice(0, 4)
 }
+
+/** Daily free-tier limits read differently from a temporary spike, so they get their own message. */
+const isQuotaExhausted = (message: string) => /quota|exceeded your current quota|per day/i.test(message)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -80,44 +85,70 @@ Deno.serve(async (req) => {
     generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
   })
 
-  async function ask(model: string) {
-    const res = await fetch(`${API}/models/${model}:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    })
-    return { res, data: await res.json().catch(() => ({})) }
-  }
+  let lastError = 'The assistant could not reach the model.'
+  let quotaHit = false
 
   try {
-    let model = await pickModel(key)
-    let { res, data } = await ask(model)
+    const chain = await modelChain(key)
 
-    // The pinned/cached model may have been retired — pick another one and retry once
-    if (res.status === 404) {
-      cachedModel = null
-      const names = await availableModels(key)
-      const next = PREFERRED.find((p) => names.includes(p)) ?? names.find((n) => n.includes('flash'))
-      if (next && next !== model) {
-        cachedModel = next
-        model = next
-        ;({ res, data } = await ask(model))
+    for (const model of chain) {
+      for (let attempt = 0; attempt < RETRIES_PER_MODEL; attempt++) {
+        let res: Response
+        let data: Record<string, unknown> & { error?: { message?: string }; candidates?: unknown[]; promptFeedback?: { blockReason?: string } }
+        try {
+          res = await fetch(`${API}/models/${model}:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          })
+          data = await res.json().catch(() => ({}))
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : 'Network error while reaching Gemini.'
+          await sleep(500 * (attempt + 1))
+          continue
+        }
+
+        if (res.ok) {
+          const candidate = (data.candidates as { content?: unknown; finishReason?: string }[] | undefined)?.[0]
+          if (candidate) {
+            cachedModels = [model, ...(cachedModels ?? []).filter((m) => m !== model)]
+            return json({ model, content: candidate.content ?? { role: 'model', parts: [] }, finishReason: candidate.finishReason })
+          }
+          const blocked = data.promptFeedback?.blockReason
+          lastError = blocked ? `The request was blocked (${blocked}).` : 'The model returned an empty answer.'
+          break // a blocked prompt will be blocked on the next model too
+        }
+
+        lastError = data.error?.message ?? `Gemini returned ${res.status}.`
+
+        // Model gone: drop it from the cache and move to the next one
+        if (res.status === 404) {
+          cachedModels = (cachedModels ?? []).filter((m) => m !== model)
+          break
+        }
+        // Daily free-tier limit: every model shares the same quota, so stop here
+        if (res.status === 429 && isQuotaExhausted(lastError)) {
+          quotaHit = true
+          break
+        }
+        // Busy right now: wait a moment and try again, then fall through to the next model
+        if (BUSY_STATUS.has(res.status)) {
+          if (attempt < RETRIES_PER_MODEL - 1) await sleep(700 * (attempt + 1))
+          continue
+        }
+        break // 400-type errors won't be fixed by retrying
       }
+      if (quotaHit) break
     }
-
-    if (!res.ok) {
-      const message = data?.error?.message ?? `Gemini returned ${res.status}.`
-      return json({ error: message, status: res.status }, res.status === 429 ? 429 : 502)
-    }
-
-    const candidate = data.candidates?.[0]
-    if (!candidate) {
-      const blocked = data.promptFeedback?.blockReason
-      return json({ error: blocked ? `The request was blocked (${blocked}).` : 'The model returned nothing.' }, 502)
-    }
-
-    return json({ model, content: candidate.content ?? { role: 'model', parts: [] }, finishReason: candidate.finishReason })
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'Could not reach Gemini.' }, 502)
+    lastError = err instanceof Error ? err.message : lastError
   }
+
+  if (quotaHit) {
+    return json({ error: 'Today’s free Gemini limit is used up. It resets after midnight (US Pacific) — please try again later.' }, 429)
+  }
+  if (/high demand|overload|unavailable|503|try again/i.test(lastError)) {
+    return json({ error: 'The AI model is busy right now. I tried the backup models too — please send that again in a minute.' }, 503)
+  }
+  return json({ error: lastError }, 502)
 })
