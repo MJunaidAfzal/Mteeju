@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { calcTotals, formatDate, formatMoney, type Invoice } from '../lib/invoices'
+import { calcTotals, formatDate, formatMoney, usesAccent, type Invoice } from '../lib/invoices'
 import './InvoiceDocument.css'
 
 const STATUS_LABEL = { draft: 'Draft', sent: 'Sent', paid: 'Paid' }
@@ -45,7 +45,7 @@ const InvoiceDocument = forwardRef<HTMLDivElement, { invoice: Invoice }>(functio
   )
 
   return (
-    <div className={`inv inv--${invoice.template}`} ref={ref}>
+    <div className={`inv inv--${invoice.template}${usesAccent(invoice.template) ? ` inv--accent-${invoice.accent}` : ''}`} ref={ref}>
       {invoice.template === 'classic' ? <div className="inv__band">{header}</div> : header}
 
       <div className="inv__parties">

@@ -238,10 +238,199 @@
   gap: 8px;
 }
 
+/* Template picker: small cards with a hint of the layout */
 .inv-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.inv-tpl {
+  --accent: #173b2f;
+  --accent-2: #0c2118;
+  --accent-soft: #f2f6f3;
+
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--paper);
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.inv-tpl:hover:not(:disabled) {
+  border-color: var(--green-700);
+}
+
+.inv-tpl.is-active {
+  border-color: var(--green-800);
+  box-shadow: 0 0 0 3px rgba(35, 75, 58, 0.14);
+}
+
+.inv-tpl:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.inv-tpl__art {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  height: 62px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.inv-tpl__bar {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.inv-tpl__line {
+  height: 4px;
+  border-radius: 2px;
+  background: #e3ded4;
+}
+
+.inv-tpl__line--short {
+  width: 60%;
+}
+
+.inv-tpl__total {
+  justify-self: end;
+  width: 42%;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.inv-tpl__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.inv-tpl__desc {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-400);
+}
+
+/* Per-template hints in the little preview */
+.inv-tpl--classic .inv-tpl__bar {
+  margin: -8px -8px 0;
+  height: 18px;
+  border-radius: 0;
+}
+
+.inv-tpl--modern .inv-tpl__art {
+  position: relative;
+  padding-left: 14px;
+}
+
+.inv-tpl--modern .inv-tpl__art::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+
+.inv-tpl--modern .inv-tpl__bar {
+  width: 50%;
+  justify-self: end;
+  background: var(--accent);
+}
+
+.inv-tpl--minimal .inv-tpl__bar {
+  height: 3px;
+  background: #2a2a2a;
+}
+
+.inv-tpl--minimal .inv-tpl__total {
+  height: 4px;
+  background: #2a2a2a;
+}
+
+.inv-tpl--luxe .inv-tpl__art {
+  background: #0e0e0e;
+  border-color: #2a2a2a;
+}
+
+.inv-tpl--luxe .inv-tpl__bar,
+.inv-tpl--luxe .inv-tpl__total {
+  background: linear-gradient(120deg, #f4dc93, #d4af37, #a97f21);
+}
+
+.inv-tpl--luxe .inv-tpl__line {
+  background: rgba(246, 241, 230, 0.28);
+}
+
+.inv-tpl--bold .inv-tpl__bar {
+  margin: -8px -8px 2px;
+  height: 26px;
+  border-radius: 0;
+}
+
+.inv-tpl--compact .inv-tpl__art {
+  gap: 3px;
+}
+
+.inv-tpl--compact .inv-tpl__bar {
+  height: 6px;
+}
+
+.inv-tpl--compact .inv-tpl__line {
+  height: 3px;
+}
+
+/* Colour swatches */
+.inv-accents {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+}
+
+.inv-accent {
+  width: 30px;
+  height: 30px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.12) inset;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.inv-accent:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+
+.inv-accent.is-active {
+  border-color: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink-900);
+}
+
+.inv-accent:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inv-accents .api-hint {
+  flex: 1;
+  min-width: 150px;
 }
 
 .inv-clear {
@@ -250,6 +439,16 @@
 
 .inv-remember {
   margin-top: 16px;
+  /* The shared checkbox style keeps text on one line; this one needs to wrap */
+  align-items: flex-start;
+  height: auto;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.inv-remember input {
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 /* Logo / signature upload */

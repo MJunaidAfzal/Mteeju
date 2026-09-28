@@ -1,17 +1,19 @@
 /* A4 invoice document — used for the live preview, PDF printing, PNG and HTML export. */
 .inv {
+  --paper: #ffffff;
   --ink: #111111;
   --muted: #5e5a55;
   --line: #e2e2e2;
   --accent: #173b2f;
+  --accent-2: #0c2118;
   --accent-soft: #f2f6f3;
-  --maroon: #6b1e2d;
+  --on-accent: #ffffff;
 
   box-sizing: border-box;
   width: 210mm;
   min-height: 297mm;
   padding: 16mm 15mm 14mm;
-  background: #ffffff;
+  background: var(--paper);
   color: var(--ink);
   font-family: 'Inter', system-ui, 'Segoe UI', sans-serif;
   font-size: 10.5pt;
@@ -34,6 +36,43 @@
 .inv h3,
 .inv table {
   margin: 0;
+}
+
+/* ---------- Colour variants ---------- */
+.inv--accent-forest {
+  --accent: #173b2f;
+  --accent-2: #0c2118;
+  --accent-soft: #f2f6f3;
+}
+
+.inv--accent-gold {
+  --accent: #a8801f;
+  --accent-2: #6d4f0d;
+  --accent-soft: #fbf5e7;
+}
+
+.inv--accent-maroon {
+  --accent: #6b1e2d;
+  --accent-2: #45101c;
+  --accent-soft: #fbf1f2;
+}
+
+.inv--accent-navy {
+  --accent: #1f3352;
+  --accent-2: #101d31;
+  --accent-soft: #f1f4f9;
+}
+
+.inv--accent-charcoal {
+  --accent: #232323;
+  --accent-2: #000000;
+  --accent-soft: #f4f4f4;
+}
+
+.inv--accent-plum {
+  --accent: #4a2545;
+  --accent-2: #2b1428;
+  --accent-soft: #f8f1f7;
 }
 
 .inv__eyebrow {
@@ -122,7 +161,7 @@
 }
 
 .inv__status--sent {
-  background: #e6efe9;
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -156,7 +195,7 @@
 .inv__items th {
   padding: 2.5mm 3mm;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font-size: 8pt;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -236,13 +275,13 @@
   padding: 3mm 4mm !important;
   border-radius: 2mm;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font-size: 12pt;
   font-weight: 700;
 }
 
 .inv__total-row span:first-child {
-  color: rgba(255, 255, 255, 0.78) !important;
+  color: color-mix(in srgb, var(--on-accent) 78%, transparent) !important;
   font-size: 9pt;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -321,7 +360,7 @@
   color: var(--accent);
 }
 
-/* ---------- Classic ---------- */
+/* ---------- Classic: full-width accent band ---------- */
 .inv--classic {
   padding-top: 0;
 }
@@ -330,15 +369,15 @@
   margin: 0 -15mm 10mm;
   padding: 10mm 15mm 8mm;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .inv--classic .inv__band .inv__biz-lines,
 .inv--classic .inv__band .inv__eyebrow {
-  color: rgba(255, 255, 255, 0.75);
+  color: color-mix(in srgb, var(--on-accent) 75%, transparent);
 }
 
-/* A white chip keeps dark logos visible on the green band */
+/* A white chip keeps dark logos visible on the band */
 .inv--classic .inv__logo {
   padding: 2mm;
   border-radius: 1.5mm;
@@ -346,25 +385,24 @@
 }
 
 .inv--classic .inv__title h1 {
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .inv--classic .inv__meta dt {
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
 }
 
 .inv--classic .inv__meta dd {
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .inv--classic .inv__status {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--on-accent) 16%, transparent);
+  color: var(--on-accent);
 }
 
-/* ---------- Modern ---------- */
+/* ---------- Modern: gradient side bar ---------- */
 .inv--modern {
-  --accent: #10271c;
   position: relative;
   padding-left: 22mm;
 }
@@ -376,13 +414,12 @@
   bottom: 0;
   left: 0;
   width: 7mm;
-  background: linear-gradient(180deg, var(--accent), var(--maroon));
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
 }
 
 .inv--modern .inv__title h1 {
   font-size: 30pt;
   letter-spacing: -0.02em;
-  color: var(--maroon);
 }
 
 .inv--modern .inv__items th {
@@ -402,13 +439,11 @@
 }
 
 .inv--modern .inv__total-row {
-  background: var(--maroon);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
 }
 
-/* ---------- Minimal ---------- */
+/* ---------- Minimal: fine rules, mostly monochrome ---------- */
 .inv--minimal {
-  --accent: #202020;
-  --accent-soft: #f6f5f2;
   font-size: 10pt;
 }
 
@@ -439,7 +474,7 @@
 
 .inv--minimal .inv__total-row {
   background: transparent;
-  border-top: 0.6mm solid var(--ink);
+  border-top: 0.6mm solid var(--accent);
   border-radius: 0;
   color: var(--ink);
 }
@@ -450,6 +485,196 @@
 
 .inv--minimal .inv__thanks {
   color: var(--ink);
+}
+
+/* ---------- Luxe: black paper with gold ---------- */
+.inv--luxe {
+  --paper: #0e0e0e;
+  --ink: #f6f1e6;
+  --muted: rgba(246, 241, 230, 0.62);
+  --line: rgba(246, 241, 230, 0.16);
+  --accent: #d4af37;
+  --accent-2: #8a6d1c;
+  --accent-soft: rgba(212, 175, 55, 0.12);
+  --on-accent: #0e0e0e;
+  padding-top: 12mm;
+}
+
+.inv--luxe .inv__head {
+  padding-bottom: 8mm;
+  border-bottom: 0.4mm solid var(--accent);
+}
+
+.inv--luxe .inv__biz-name {
+  letter-spacing: 0.02em;
+}
+
+.inv--luxe .inv__title h1 {
+  font-size: 24pt;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  background: linear-gradient(120deg, #f4dc93, var(--accent), #a97f21);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.inv--luxe .inv__logo {
+  padding: 2mm;
+  border-radius: 1.5mm;
+  background: rgba(246, 241, 230, 0.92);
+}
+
+.inv--luxe .inv__status {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.inv--luxe .inv__status--draft,
+.inv--luxe .inv__status--paid {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.inv--luxe .inv__items th {
+  background: transparent;
+  border-top: 0.3mm solid var(--accent);
+  border-bottom: 0.3mm solid var(--accent);
+  color: var(--accent);
+  letter-spacing: 0.16em;
+}
+
+.inv--luxe .inv__pay {
+  border: 0.3mm solid var(--line);
+}
+
+.inv--luxe .inv__total-row {
+  background: linear-gradient(120deg, #f4dc93, var(--accent), #a97f21);
+  color: #121212;
+}
+
+.inv--luxe .inv__total-row span:first-child {
+  color: rgba(18, 18, 18, 0.72) !important;
+}
+
+.inv--luxe .inv__sign-line {
+  border-top-color: var(--accent);
+}
+
+.inv--luxe .inv__sign-script,
+.inv--luxe .inv__block-title {
+  color: var(--ink);
+}
+
+.inv--luxe .inv__sign img {
+  padding: 1.5mm;
+  border-radius: 1mm;
+  background: rgba(246, 241, 230, 0.92);
+}
+
+/* ---------- Bold: oversized header block ---------- */
+.inv--bold {
+  padding: 0 15mm 14mm;
+}
+
+/* The header block breaks out to the full page width */
+.inv--bold .inv__head {
+  margin: 0 -15mm 10mm;
+  padding: 14mm 15mm 10mm;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.inv--bold .inv__head .inv__biz-lines,
+.inv--bold .inv__head .inv__eyebrow {
+  color: color-mix(in srgb, var(--on-accent) 75%, transparent);
+}
+
+.inv--bold .inv__logo {
+  padding: 2mm;
+  border-radius: 1.5mm;
+  background: #ffffff;
+}
+
+.inv--bold .inv__title h1 {
+  font-size: 40pt;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--on-accent);
+}
+
+.inv--bold .inv__meta dt {
+  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
+}
+
+.inv--bold .inv__meta dd {
+  color: var(--on-accent);
+}
+
+.inv--bold .inv__status {
+  background: color-mix(in srgb, var(--on-accent) 18%, transparent);
+  color: var(--on-accent);
+}
+
+.inv--bold .inv__items th {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.inv--bold .inv__items tbody tr:nth-child(odd) td {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+
+.inv--bold .inv__total-row {
+  background: var(--accent-2);
+}
+
+/* ---------- Compact: dense, good for long item lists ---------- */
+.inv--compact {
+  padding: 12mm 13mm;
+  font-size: 9.5pt;
+}
+
+.inv--compact .inv__title h1 {
+  font-size: 19pt;
+  letter-spacing: 0.1em;
+}
+
+.inv--compact .inv__head {
+  padding-bottom: 5mm;
+  border-bottom: 0.6mm solid var(--accent);
+}
+
+.inv--compact .inv__parties {
+  margin-top: 6mm;
+  padding: 4mm 5mm;
+  border-radius: 2mm;
+  background: var(--accent-soft);
+}
+
+.inv--compact .inv__items {
+  margin-top: 6mm;
+  font-size: 9pt;
+}
+
+.inv--compact .inv__items th {
+  padding: 2mm 2.5mm;
+}
+
+.inv--compact .inv__items td {
+  padding: 2mm 2.5mm;
+}
+
+.inv--compact .inv__bottom {
+  margin-top: 6mm;
+}
+
+.inv--compact .inv__sign {
+  margin-top: 6mm;
+}
+
+.inv--compact .inv__foot {
+  padding-top: 5mm;
 }
 
 /* ---------- Preview scaling & export ---------- */

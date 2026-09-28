@@ -24,6 +24,7 @@ import InvoiceDocument from '../components/InvoiceDocument'
 import { SetupRequiredError } from '../lib/apiStore'
 import { downloadHtml, downloadPng, printInvoice } from '../lib/invoiceExport'
 import {
+  ACCENTS,
   CURRENCIES,
   DEFAULT_SETTINGS,
   TEMPLATES,
@@ -36,11 +37,14 @@ import {
   fetchSettings,
   formatDate,
   formatMoney,
+  hasTemplateUpgrade,
   newItem,
   nextNumber,
   readImage,
   saveSettings,
   upsertInvoice,
+  usesAccent,
+  type AccentId,
   type Invoice,
   type InvoiceItem,
   type InvoiceSettings,
@@ -48,6 +52,7 @@ import {
   type TemplateId,
 } from '../lib/invoices'
 import setupSql from '../../supabase/migrations/20260926000000_invoices.sql?raw'
+import templatesSql from '../../supabase/migrations/20260928000000_invoice_templates.sql?raw'
 import './Invoices.css'
 
 const STATUSES: { id: InvoiceStatus; label: string }[] = [
@@ -288,6 +293,7 @@ export default function Invoices() {
           business: draft.business,
           currency: draft.currency,
           template: draft.template,
+          accent: draft.accent,
           taxRate: draft.taxRate,
           terms: draft.terms,
           paymentDetails: draft.paymentDetails,
@@ -412,22 +418,72 @@ export default function Invoices() {
                     ))}
                   </select>
                 </label>
-                <div className="inv-field">
+                <div className="inv-field inv-field--wide">
                   <span>Template</span>
                   <div className="inv-templates">
-                    {TEMPLATES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        title={t.description}
-                        className={`lead-chip${draft.template === t.id ? ' is-active' : ''}`}
-                        onClick={() => update({ template: t.id as TemplateId })}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
+                    {TEMPLATES.map((t) => {
+                      const locked = !t.legacy && !hasTemplateUpgrade()
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          title={locked ? 'Run the templates SQL script to unlock this one' : t.description}
+                          className={`inv-tpl inv-tpl--${t.id}${draft.template === t.id ? ' is-active' : ''}${usesAccent(t.id) ? ` inv--accent-${draft.accent}` : ''}`}
+                          onClick={() => update({ template: t.id as TemplateId })}
+                          disabled={locked}
+                        >
+                          <span className="inv-tpl__art" aria-hidden="true">
+                            <span className="inv-tpl__bar" />
+                            <span className="inv-tpl__line" />
+                            <span className="inv-tpl__line inv-tpl__line--short" />
+                            <span className="inv-tpl__total" />
+                          </span>
+                          <span className="inv-tpl__name">{t.name}</span>
+                          <span className="inv-tpl__desc">{locked ? 'Needs the SQL update' : t.description}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
+
+                <div className="inv-field inv-field--wide">
+                  <span>Colour</span>
+                  <div className="inv-accents">
+                    {ACCENTS.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        title={a.name}
+                        aria-label={a.name}
+                        aria-pressed={draft.accent === a.id}
+                        className={`inv-accent${draft.accent === a.id ? ' is-active' : ''}`}
+                        style={{ background: a.color }}
+                        onClick={() => update({ accent: a.id as AccentId })}
+                        disabled={!usesAccent(draft.template) || !hasTemplateUpgrade()}
+                      />
+                    ))}
+                    <span className="api-hint">
+                      {!hasTemplateUpgrade()
+                        ? 'Colours need the SQL update below.'
+                        : usesAccent(draft.template)
+                          ? 'Works with every template.'
+                          : 'Luxe is always black & gold.'}
+                    </span>
+                  </div>
+                </div>
+
+                {!hasTemplateUpgrade() && (
+                  <div className="lead-note inv-field--wide">
+                    <AlertCircle size={15} />
+                    <span>
+                      Run one more small SQL script in Supabase to unlock the Luxe, Bold and Compact templates and the colour options (
+                      <code>20260928000000_invoice_templates.sql</code>).
+                    </span>
+                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => void navigator.clipboard.writeText(templatesSql)}>
+                      <Copy size={14} /> Copy SQL
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 

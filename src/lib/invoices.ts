@@ -3,7 +3,8 @@ import { supabase } from './supabase'
 import { SetupRequiredError } from './apiStore'
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid'
-export type TemplateId = 'classic' | 'modern' | 'minimal'
+export type TemplateId = 'classic' | 'modern' | 'minimal' | 'luxe' | 'bold' | 'compact'
+export type AccentId = 'forest' | 'gold' | 'maroon' | 'navy' | 'charcoal' | 'plum'
 export type DiscountType = 'amount' | 'percent'
 
 export interface Business {
@@ -36,6 +37,7 @@ export interface Invoice {
   number: string
   status: InvoiceStatus
   template: TemplateId
+  accent: AccentId
   issueDate: string
   dueDate: string
   currency: string
@@ -59,6 +61,7 @@ export interface InvoiceSettings {
   business: Business
   currency: string
   template: TemplateId
+  accent: AccentId
   taxRate: number
   terms: string
   paymentDetails: string
@@ -68,11 +71,31 @@ export interface InvoiceSettings {
   dueDays: number
 }
 
-export const TEMPLATES: { id: TemplateId; name: string; description: string }[] = [
-  { id: 'classic', name: 'Classic', description: 'Dark green header, formal and bold' },
-  { id: 'modern', name: 'Modern', description: 'Side accent bar with a large total' },
-  { id: 'minimal', name: 'Minimal', description: 'Plenty of white space, fine rules' },
+export const TEMPLATES: { id: TemplateId; name: string; description: string; legacy?: boolean }[] = [
+  { id: 'classic', name: 'Classic', description: 'Full-width colour band across the header', legacy: true },
+  { id: 'modern', name: 'Modern', description: 'Gradient side bar with a large total', legacy: true },
+  { id: 'minimal', name: 'Minimal', description: 'Plenty of white space, fine rules', legacy: true },
+  { id: 'luxe', name: 'Luxe', description: 'Black paper with gold lettering — premium look' },
+  { id: 'bold', name: 'Bold', description: 'Oversized header block and striped rows' },
+  { id: 'compact', name: 'Compact', description: 'Tighter layout, fits long item lists' },
 ]
+
+export const ACCENTS: { id: AccentId; name: string; color: string }[] = [
+  { id: 'forest', name: 'Forest', color: '#173b2f' },
+  { id: 'gold', name: 'Gold', color: '#a8801f' },
+  { id: 'maroon', name: 'Maroon', color: '#6b1e2d' },
+  { id: 'navy', name: 'Navy', color: '#1f3352' },
+  { id: 'charcoal', name: 'Charcoal', color: '#232323' },
+  { id: 'plum', name: 'Plum', color: '#4a2545' },
+]
+
+/** Luxe is always black & gold, so the colour picker does not apply to it. */
+export const usesAccent = (template: TemplateId) => template !== 'luxe'
+
+// Whether the invoices table has the newer template/accent options
+let templatesUpgraded = true
+export const hasTemplateUpgrade = () => templatesUpgraded
+const LEGACY_TEMPLATES = new Set<TemplateId>(['classic', 'modern', 'minimal'])
 
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'PKR', 'AED', 'SAR', 'INR', 'CAD', 'AUD', 'TRY', 'MYR', 'SGD', 'BDT', 'ZAR']
 
@@ -85,6 +108,7 @@ export const DEFAULT_SETTINGS: InvoiceSettings = {
   business: emptyBusiness(),
   currency: 'USD',
   template: 'classic',
+  accent: 'forest',
   taxRate: 0,
   terms: 'Payment is due within 14 days of the invoice date.',
   paymentDetails: '',
@@ -109,6 +133,7 @@ export function blankInvoice(settings: InvoiceSettings, number: string): Invoice
     number,
     status: 'draft',
     template: settings.template,
+    accent: settings.accent,
     issueDate,
     dueDate: addDays(issueDate, settings.dueDays || 0),
     currency: settings.currency,
@@ -216,6 +241,7 @@ interface InvoiceRow {
   number: string
   status: InvoiceStatus
   template: TemplateId
+  accent: AccentId | null
   issue_date: string
   due_date: string | null
   currency: string
@@ -239,6 +265,7 @@ const fromRow = (row: InvoiceRow): Invoice => ({
   number: row.number,
   status: row.status,
   template: row.template,
+  accent: row.accent ?? 'forest',
   issueDate: row.issue_date,
   dueDate: row.due_date ?? '',
   currency: row.currency,
@@ -263,7 +290,9 @@ const toRow = (invoice: Invoice) => {
     id: invoice.id,
     number: invoice.number.trim(),
     status: invoice.status,
-    template: invoice.template,
+    // Older databases only know the first three templates
+    template: templatesUpgraded || LEGACY_TEMPLATES.has(invoice.template) ? invoice.template : 'classic',
+    ...(templatesUpgraded ? { accent: invoice.accent } : {}),
     issue_date: invoice.issueDate,
     due_date: invoice.dueDate || null,
     currency: invoice.currency,
@@ -285,7 +314,13 @@ const toRow = (invoice: Invoice) => {
 }
 
 export async function fetchInvoices(): Promise<Invoice[]> {
-  const { data, error } = await supabase.from('invoices').select('*').order('issue_date', { ascending: false }).order('created_at', { ascending: false })
+  const [{ data, error }, probe] = await Promise.all([
+    supabase.from('invoices').select('*').order('issue_date', { ascending: false }).order('created_at', { ascending: false }),
+    supabase.from('invoices').select('accent').limit(1),
+  ])
+  // A missing "accent" column means the template upgrade script has not been run yet
+  if (probe.error && (probe.error.code === '42703' || /accent/i.test(probe.error.message))) templatesUpgraded = false
+  else if (!probe.error) templatesUpgraded = true
   if (error) fail(error)
   return (data as InvoiceRow[]).map(fromRow)
 }
