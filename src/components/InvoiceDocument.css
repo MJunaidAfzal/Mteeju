@@ -8,6 +8,10 @@
   --accent-2: #0c2118;
   --accent-soft: #f2f6f3;
   --on-accent: #ffffff;
+  --metal: #d4af37;
+  --metal-deep: #8a6d1c;
+  --metal-grad: linear-gradient(120deg, #f4dc93, #d4af37, #a97f21);
+  --on-metal: #101010;
 
   box-sizing: border-box;
   width: 210mm;
@@ -49,6 +53,27 @@
   --accent: #a8801f;
   --accent-2: #6d4f0d;
   --accent-soft: #fbf5e7;
+  --metal: #d4af37;
+  --metal-deep: #8a6d1c;
+  --metal-grad: linear-gradient(120deg, #f4dc93, #d4af37, #a97f21);
+}
+
+.inv--accent-champagne {
+  --metal: #e3ce9e;
+  --metal-deep: #9c8452;
+  --metal-grad: linear-gradient(120deg, #f9f2de, #e3ce9e, #b49a63);
+}
+
+.inv--accent-rose {
+  --metal: #e0a899;
+  --metal-deep: #a56352;
+  --metal-grad: linear-gradient(120deg, #f7dcd2, #e0a899, #b2705f);
+}
+
+.inv--accent-silver {
+  --metal: #cfd3d6;
+  --metal-deep: #8b9297;
+  --metal-grad: linear-gradient(120deg, #f2f4f5, #cfd3d6, #9aa1a6);
 }
 
 .inv--accent-maroon {
@@ -488,15 +513,21 @@
 }
 
 /* ---------- Luxe: black paper with gold ---------- */
-.inv--luxe {
+.inv--luxe,
+.inv--noir,
+.inv--royal,
+.inv--onyx {
   --paper: #0e0e0e;
   --ink: #f6f1e6;
   --muted: rgba(246, 241, 230, 0.62);
   --line: rgba(246, 241, 230, 0.16);
-  --accent: #d4af37;
-  --accent-2: #8a6d1c;
-  --accent-soft: rgba(212, 175, 55, 0.12);
-  --on-accent: #0e0e0e;
+  --accent: var(--metal);
+  --accent-2: var(--metal-deep);
+  --accent-soft: color-mix(in srgb, var(--metal) 12%, transparent);
+  --on-accent: var(--on-metal);
+}
+
+.inv--luxe {
   padding-top: 12mm;
 }
 
@@ -509,31 +540,41 @@
   letter-spacing: 0.02em;
 }
 
-.inv--luxe .inv__title h1 {
+.inv--luxe .inv__title h1,
+.inv--noir .inv__title h1,
+.inv--onyx .inv__title h1 {
   font-size: 24pt;
   font-weight: 600;
   letter-spacing: 0.3em;
-  background: linear-gradient(120deg, #f4dc93, var(--accent), #a97f21);
+  background: var(--metal-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.inv--luxe .inv__logo {
+.inv--luxe .inv__logo,
+.inv--noir .inv__logo,
+.inv--royal .inv__logo,
+.inv--onyx .inv__logo {
   padding: 2mm;
   border-radius: 1.5mm;
   background: rgba(246, 241, 230, 0.92);
 }
 
-.inv--luxe .inv__status {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
+.inv--luxe .inv__status,
 .inv--luxe .inv__status--draft,
-.inv--luxe .inv__status--paid {
+.inv--luxe .inv__status--paid,
+.inv--noir .inv__status,
+.inv--noir .inv__status--draft,
+.inv--noir .inv__status--paid,
+.inv--royal .inv__status,
+.inv--royal .inv__status--draft,
+.inv--royal .inv__status--paid,
+.inv--onyx .inv__status,
+.inv--onyx .inv__status--draft,
+.inv--onyx .inv__status--paid {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--metal);
 }
 
 .inv--luxe .inv__items th {
@@ -548,28 +589,202 @@
   border: 0.3mm solid var(--line);
 }
 
-.inv--luxe .inv__total-row {
-  background: linear-gradient(120deg, #f4dc93, var(--accent), #a97f21);
-  color: #121212;
+.inv--luxe .inv__total-row,
+.inv--royal .inv__total-row,
+.inv--onyx .inv__total-row {
+  background: var(--metal-grad);
+  color: var(--on-metal);
 }
 
-.inv--luxe .inv__total-row span:first-child {
+.inv--luxe .inv__total-row span:first-child,
+.inv--royal .inv__total-row span:first-child,
+.inv--onyx .inv__total-row span:first-child {
   color: rgba(18, 18, 18, 0.72) !important;
 }
 
-.inv--luxe .inv__sign-line {
-  border-top-color: var(--accent);
+.inv--luxe .inv__sign-line,
+.inv--noir .inv__sign-line,
+.inv--royal .inv__sign-line,
+.inv--onyx .inv__sign-line {
+  border-top-color: var(--metal);
 }
 
 .inv--luxe .inv__sign-script,
-.inv--luxe .inv__block-title {
+.inv--luxe .inv__block-title,
+.inv--noir .inv__sign-script,
+.inv--noir .inv__block-title,
+.inv--royal .inv__sign-script,
+.inv--royal .inv__block-title,
+.inv--onyx .inv__sign-script,
+.inv--onyx .inv__block-title {
   color: var(--ink);
 }
 
-.inv--luxe .inv__sign img {
+.inv--luxe .inv__sign img,
+.inv--noir .inv__sign img,
+.inv--royal .inv__sign img,
+.inv--onyx .inv__sign img {
   padding: 1.5mm;
   border-radius: 1mm;
   background: rgba(246, 241, 230, 0.92);
+}
+
+/* ---------- Noir: black page inside a fine metal frame ---------- */
+.inv--noir {
+  padding: 10mm;
+  border: 0.8mm solid var(--metal);
+  outline: 0.3mm solid var(--metal);
+  outline-offset: -3mm;
+}
+
+.inv--noir .inv__head {
+  flex-direction: column;
+  align-items: center;
+  gap: 4mm;
+  padding: 6mm 6mm 4mm;
+  text-align: center;
+}
+
+.inv--noir .inv__title,
+.inv--noir .inv__biz {
+  text-align: center;
+}
+
+.inv--noir .inv__meta {
+  justify-content: center;
+}
+
+.inv--noir .inv__meta dt,
+.inv--noir .inv__meta dd {
+  text-align: center;
+}
+
+.inv--noir .inv__title h1 {
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+}
+
+.inv--noir .inv__parties,
+.inv--noir .inv__items,
+.inv--noir .inv__bottom,
+.inv--noir .inv__foot {
+  padding-left: 6mm;
+  padding-right: 6mm;
+}
+
+.inv--noir .inv__items th {
+  background: transparent;
+  border-top: 0.3mm solid var(--metal);
+  border-bottom: 0.3mm solid var(--metal);
+  color: var(--metal);
+}
+
+.inv--noir .inv__pay {
+  border: 0.3mm solid var(--line);
+}
+
+.inv--noir .inv__total-row {
+  background: transparent;
+  border: 0.5mm solid var(--metal);
+  color: var(--metal);
+}
+
+.inv--noir .inv__total-row span:first-child {
+  color: color-mix(in srgb, var(--metal) 78%, transparent) !important;
+}
+
+/* ---------- Royal: metal band across a black page ---------- */
+.inv--royal {
+  padding: 0 15mm 14mm;
+}
+
+.inv--royal .inv__head {
+  margin: 0 -15mm 10mm;
+  padding: 12mm 15mm 9mm;
+  background: var(--metal-grad);
+  color: var(--on-metal);
+}
+
+.inv--royal .inv__head .inv__biz-lines,
+.inv--royal .inv__head .inv__eyebrow,
+.inv--royal .inv__meta dt {
+  color: rgba(16, 16, 16, 0.72);
+}
+
+.inv--royal .inv__title h1 {
+  font-size: 28pt;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--on-metal);
+}
+
+.inv--royal .inv__meta dd {
+  color: var(--on-metal);
+}
+
+.inv--royal .inv__status,
+.inv--royal .inv__status--draft,
+.inv--royal .inv__status--paid {
+  background: rgba(16, 16, 16, 0.18);
+  color: var(--on-metal);
+}
+
+.inv--royal .inv__items th {
+  background: var(--metal);
+  color: var(--on-metal);
+}
+
+.inv--royal .inv__pay {
+  border: 0.3mm solid var(--line);
+}
+
+.inv--royal .inv__thanks {
+  color: var(--metal);
+}
+
+/* ---------- Onyx: charcoal with a large metal total ---------- */
+.inv--onyx {
+  --paper: #151515;
+  position: relative;
+  padding-left: 22mm;
+}
+
+.inv--onyx::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5mm;
+  background: var(--metal-grad);
+}
+
+.inv--onyx .inv__head {
+  padding-bottom: 7mm;
+  border-bottom: 0.3mm solid var(--line);
+}
+
+.inv--onyx .inv__title h1 {
+  letter-spacing: 0.18em;
+}
+
+.inv--onyx .inv__items th {
+  background: rgba(246, 241, 230, 0.06);
+  color: var(--metal);
+  letter-spacing: 0.14em;
+}
+
+.inv--onyx .inv__items tbody tr:nth-child(odd) td {
+  background: rgba(246, 241, 230, 0.03);
+}
+
+.inv--onyx .inv__pay {
+  border: 0.3mm solid var(--line);
+}
+
+.inv--onyx .inv__total-row {
+  padding: 5mm 4mm !important;
+  font-size: 14pt;
 }
 
 /* ---------- Bold: oversized header block ---------- */

@@ -24,7 +24,6 @@ import InvoiceDocument from '../components/InvoiceDocument'
 import { SetupRequiredError } from '../lib/apiStore'
 import { downloadHtml, downloadPng, printInvoice } from '../lib/invoiceExport'
 import {
-  ACCENTS,
   CURRENCIES,
   DEFAULT_SETTINGS,
   TEMPLATES,
@@ -35,24 +34,25 @@ import {
   emptyClient,
   fetchInvoices,
   fetchSettings,
+  accentForTemplate,
+  accentsFor,
   formatDate,
   formatMoney,
   hasTemplateUpgrade,
+  isDarkTemplate,
   newItem,
   nextNumber,
   readImage,
   saveSettings,
   upsertInvoice,
-  usesAccent,
   type AccentId,
   type Invoice,
   type InvoiceItem,
   type InvoiceSettings,
   type InvoiceStatus,
-  type TemplateId,
 } from '../lib/invoices'
 import setupSql from '../../supabase/migrations/20260926000000_invoices.sql?raw'
-import templatesSql from '../../supabase/migrations/20260928000000_invoice_templates.sql?raw'
+import templatesSql from '../../supabase/migrations/20260928010000_invoice_gold_templates.sql?raw'
 import './Invoices.css'
 
 const STATUSES: { id: InvoiceStatus; label: string }[] = [
@@ -367,6 +367,11 @@ export default function Invoices() {
           <div className="alert alert--error api-banner" role="alert">
             <AlertCircle size={16} />
             <span>{saveError}</span>
+            {saveError.includes('SQL script') && (
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => void navigator.clipboard.writeText(templatesSql)}>
+                <Copy size={14} /> Copy SQL
+              </button>
+            )}
             <button type="button" className="api-icon-btn" onClick={() => setSaveError(null)} aria-label="Dismiss">
               <X size={15} />
             </button>
@@ -428,8 +433,8 @@ export default function Invoices() {
                           key={t.id}
                           type="button"
                           title={locked ? 'Run the templates SQL script to unlock this one' : t.description}
-                          className={`inv-tpl inv-tpl--${t.id}${draft.template === t.id ? ' is-active' : ''}${usesAccent(t.id) ? ` inv--accent-${draft.accent}` : ''}`}
-                          onClick={() => update({ template: t.id as TemplateId })}
+                          className={`inv-tpl inv-tpl--${t.id}${draft.template === t.id ? ' is-active' : ''} inv--accent-${accentForTemplate(t.id, draft.accent)}`}
+                          onClick={() => update({ template: t.id, accent: accentForTemplate(t.id, draft.accent) })}
                           disabled={locked}
                         >
                           <span className="inv-tpl__art" aria-hidden="true">
@@ -447,9 +452,9 @@ export default function Invoices() {
                 </div>
 
                 <div className="inv-field inv-field--wide">
-                  <span>Colour</span>
+                  <span>{isDarkTemplate(draft.template) ? 'Metal tone' : 'Colour'}</span>
                   <div className="inv-accents">
-                    {ACCENTS.map((a) => (
+                    {accentsFor(draft.template).map((a) => (
                       <button
                         key={a.id}
                         type="button"
@@ -459,15 +464,15 @@ export default function Invoices() {
                         className={`inv-accent${draft.accent === a.id ? ' is-active' : ''}`}
                         style={{ background: a.color }}
                         onClick={() => update({ accent: a.id as AccentId })}
-                        disabled={!usesAccent(draft.template) || !hasTemplateUpgrade()}
+                        disabled={!hasTemplateUpgrade()}
                       />
                     ))}
                     <span className="api-hint">
                       {!hasTemplateUpgrade()
                         ? 'Colours need the SQL update below.'
-                        : usesAccent(draft.template)
-                          ? 'Works with every template.'
-                          : 'Luxe is always black & gold.'}
+                        : isDarkTemplate(draft.template)
+                          ? 'Gold, champagne, rose gold or silver on the black page.'
+                          : 'Works with every light template.'}
                     </span>
                   </div>
                 </div>
@@ -476,8 +481,8 @@ export default function Invoices() {
                   <div className="lead-note inv-field--wide">
                     <AlertCircle size={15} />
                     <span>
-                      Run one more small SQL script in Supabase to unlock the Luxe, Bold and Compact templates and the colour options (
-                      <code>20260928000000_invoice_templates.sql</code>).
+                      Run one more small SQL script in Supabase to unlock the Luxe, Noir, Royal, Onyx, Bold and Compact templates and the colour
+                      options (<code>20260928010000_invoice_gold_templates.sql</code>).
                     </span>
                     <button type="button" className="btn btn--secondary btn--sm" onClick={() => void navigator.clipboard.writeText(templatesSql)}>
                       <Copy size={14} /> Copy SQL

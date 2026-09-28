@@ -3,8 +3,8 @@ import { supabase } from './supabase'
 import { SetupRequiredError } from './apiStore'
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid'
-export type TemplateId = 'classic' | 'modern' | 'minimal' | 'luxe' | 'bold' | 'compact'
-export type AccentId = 'forest' | 'gold' | 'maroon' | 'navy' | 'charcoal' | 'plum'
+export type TemplateId = 'classic' | 'modern' | 'minimal' | 'luxe' | 'bold' | 'compact' | 'noir' | 'royal' | 'onyx'
+export type AccentId = 'forest' | 'gold' | 'maroon' | 'navy' | 'charcoal' | 'plum' | 'champagne' | 'rose' | 'silver'
 export type DiscountType = 'amount' | 'percent'
 
 export interface Business {
@@ -78,6 +78,20 @@ export const TEMPLATES: { id: TemplateId; name: string; description: string; leg
   { id: 'luxe', name: 'Luxe', description: 'Black paper with gold lettering — premium look' },
   { id: 'bold', name: 'Bold', description: 'Oversized header block and striped rows' },
   { id: 'compact', name: 'Compact', description: 'Tighter layout, fits long item lists' },
+  { id: 'noir', name: 'Noir', description: 'Black page inside a fine gold frame' },
+  { id: 'royal', name: 'Royal', description: 'Gold header band on black, very rich' },
+  { id: 'onyx', name: 'Onyx', description: 'Dark charcoal with a big metal total' },
+]
+
+/** Templates printed on a dark page — these use a metal tone instead of a colour. */
+export const DARK_TEMPLATES = new Set<TemplateId>(['luxe', 'noir', 'royal', 'onyx'])
+export const isDarkTemplate = (template: TemplateId) => DARK_TEMPLATES.has(template)
+
+export const METALS: { id: AccentId; name: string; color: string }[] = [
+  { id: 'gold', name: 'Gold', color: '#d4af37' },
+  { id: 'champagne', name: 'Champagne', color: '#e3ce9e' },
+  { id: 'rose', name: 'Rose gold', color: '#e0a899' },
+  { id: 'silver', name: 'Silver', color: '#cfd3d6' },
 ]
 
 export const ACCENTS: { id: AccentId; name: string; color: string }[] = [
@@ -89,8 +103,16 @@ export const ACCENTS: { id: AccentId; name: string; color: string }[] = [
   { id: 'plum', name: 'Plum', color: '#4a2545' },
 ]
 
-/** Luxe is always black & gold, so the colour picker does not apply to it. */
-export const usesAccent = (template: TemplateId) => template !== 'luxe'
+/** The swatches offered for a template: metal tones on dark designs, colours on the rest. */
+export const accentsFor = (template: TemplateId) => (isDarkTemplate(template) ? METALS : ACCENTS)
+
+/** Keeps the chosen swatch valid when switching between dark and light templates. */
+export function accentForTemplate(template: TemplateId, accent: AccentId): AccentId {
+  const allowed = accentsFor(template)
+  return allowed.some((a) => a.id === accent) ? accent : allowed[0].id
+}
+
+export const usesAccent = (_template: TemplateId) => true
 
 // Whether the invoices table has the newer template/accent options
 let templatesUpgraded = true
@@ -329,6 +351,10 @@ export async function upsertInvoice(invoice: Invoice) {
   const { error } = await supabase.from('invoices').upsert(toRow(invoice))
   if (error) {
     if (error.code === '23505') throw new Error(`Invoice number ${invoice.number} is already used. Choose another number.`)
+    // An old CHECK constraint still limits the template / colour values
+    if (error.code === '23514') {
+      throw new Error('This template needs the latest SQL script (20260928010000_invoice_gold_templates.sql). Copy it below and run it in Supabase.')
+    }
     fail(error)
   }
 }
