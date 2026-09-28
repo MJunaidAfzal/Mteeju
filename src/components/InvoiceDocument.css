@@ -1,0 +1,498 @@
+/* A4 invoice document — used for the live preview, PDF printing, PNG and HTML export. */
+.inv {
+  --ink: #111111;
+  --muted: #5e5a55;
+  --line: #e2e2e2;
+  --accent: #173b2f;
+  --accent-soft: #f2f6f3;
+  --maroon: #6b1e2d;
+
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 16mm 15mm 14mm;
+  background: #ffffff;
+  color: var(--ink);
+  font-family: 'Inter', system-ui, 'Segoe UI', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.inv *,
+.inv *::before,
+.inv *::after {
+  box-sizing: border-box;
+}
+
+.inv p,
+.inv h1,
+.inv h2,
+.inv h3,
+.inv table {
+  margin: 0;
+}
+
+.inv__eyebrow {
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- Header ---------- */
+.inv__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12mm;
+}
+
+.inv__logo {
+  max-width: 45mm;
+  max-height: 22mm;
+  margin-bottom: 3mm;
+  object-fit: contain;
+}
+
+.inv__biz-name {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.inv__biz-lines,
+.inv__party-lines {
+  margin-top: 2mm;
+  font-size: 9pt;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+.inv__title {
+  text-align: right;
+}
+
+.inv__title h1 {
+  font-size: 26pt;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.inv__meta {
+  margin-top: 4mm;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 1mm 6mm;
+  font-size: 9pt;
+}
+
+.inv__meta dt {
+  color: var(--muted);
+  text-align: right;
+}
+
+.inv__meta dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.inv__status {
+  display: inline-block;
+  margin-top: 3mm;
+  padding: 1mm 3mm;
+  border-radius: 999px;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inv__status--draft {
+  background: #ece7dc;
+  color: #4a463f;
+}
+
+.inv__status--sent {
+  background: #e6efe9;
+  color: var(--accent);
+}
+
+.inv__status--paid {
+  background: #dcebe1;
+  color: #165133;
+}
+
+/* ---------- Parties ---------- */
+.inv__parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10mm;
+  margin-top: 10mm;
+}
+
+.inv__party-name {
+  margin-top: 1.5mm;
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+/* ---------- Items ---------- */
+.inv__items {
+  width: 100%;
+  margin-top: 9mm;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+}
+
+.inv__items th {
+  padding: 2.5mm 3mm;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.inv__items th:first-child,
+.inv__items td:first-child {
+  padding-left: 4mm;
+  border-radius: 1.5mm 0 0 1.5mm;
+}
+
+.inv__items th:last-child,
+.inv__items td:last-child {
+  padding-right: 4mm;
+  border-radius: 0 1.5mm 1.5mm 0;
+  text-align: right;
+}
+
+.inv__items .inv__num,
+.inv__items .inv__rate {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.inv__items td {
+  padding: 3mm;
+  border-bottom: 0.3mm solid var(--line);
+  vertical-align: top;
+}
+
+.inv__items tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.inv__item-desc {
+  font-weight: 600;
+}
+
+.inv__row-index {
+  width: 8mm;
+  color: var(--muted);
+}
+
+/* ---------- Totals ---------- */
+.inv__bottom {
+  display: grid;
+  grid-template-columns: 1fr 78mm;
+  gap: 10mm;
+  margin-top: 8mm;
+}
+
+.inv__totals {
+  margin-left: auto;
+  width: 100%;
+  font-size: 9.5pt;
+}
+
+.inv__totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6mm;
+  padding: 1.6mm 0;
+}
+
+.inv__totals span:first-child {
+  color: var(--muted);
+}
+
+.inv__totals span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.inv__total-row {
+  margin-top: 2mm;
+  padding: 3mm 4mm !important;
+  border-radius: 2mm;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.inv__total-row span:first-child {
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-size: 9pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+/* ---------- Notes, terms, signature ---------- */
+.inv__blocks {
+  display: grid;
+  gap: 5mm;
+  font-size: 9pt;
+  color: var(--muted);
+}
+
+.inv__block-title {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.inv__block p {
+  margin-top: 1.5mm;
+  white-space: pre-line;
+}
+
+.inv__pay {
+  padding: 3mm 4mm;
+  border-radius: 2mm;
+  background: var(--accent-soft);
+}
+
+.inv__sign {
+  margin-top: 10mm;
+  margin-left: auto;
+  width: 60mm;
+  text-align: center;
+}
+
+.inv__sign img {
+  max-width: 50mm;
+  max-height: 18mm;
+  object-fit: contain;
+}
+
+.inv__sign-script {
+  font-family: 'Segoe Script', 'Brush Script MT', cursive;
+  font-size: 18pt;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.inv__sign-line {
+  margin-top: 2mm;
+  padding-top: 2mm;
+  border-top: 0.3mm solid var(--ink);
+  font-size: 8.5pt;
+  color: var(--muted);
+}
+
+.inv__foot {
+  margin-top: auto;
+  padding-top: 8mm;
+  border-top: 0.3mm solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 3mm;
+  font-size: 8.5pt;
+  color: var(--muted);
+}
+
+.inv__thanks {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ---------- Classic ---------- */
+.inv--classic {
+  padding-top: 0;
+}
+
+.inv--classic .inv__band {
+  margin: 0 -15mm 10mm;
+  padding: 10mm 15mm 8mm;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.inv--classic .inv__band .inv__biz-lines,
+.inv--classic .inv__band .inv__eyebrow {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* A white chip keeps dark logos visible on the green band */
+.inv--classic .inv__logo {
+  padding: 2mm;
+  border-radius: 1.5mm;
+  background: #ffffff;
+}
+
+.inv--classic .inv__title h1 {
+  color: #ffffff;
+}
+
+.inv--classic .inv__meta dt {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inv--classic .inv__meta dd {
+  color: #ffffff;
+}
+
+.inv--classic .inv__status {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+/* ---------- Modern ---------- */
+.inv--modern {
+  --accent: #10271c;
+  position: relative;
+  padding-left: 22mm;
+}
+
+.inv--modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 7mm;
+  background: linear-gradient(180deg, var(--accent), var(--maroon));
+}
+
+.inv--modern .inv__title h1 {
+  font-size: 30pt;
+  letter-spacing: -0.02em;
+  color: var(--maroon);
+}
+
+.inv--modern .inv__items th {
+  background: transparent;
+  border-bottom: 0.6mm solid var(--accent);
+  color: var(--accent);
+}
+
+.inv--modern .inv__items th:first-child,
+.inv--modern .inv__items td:first-child {
+  padding-left: 0;
+}
+
+.inv--modern .inv__items th:last-child,
+.inv--modern .inv__items td:last-child {
+  padding-right: 0;
+}
+
+.inv--modern .inv__total-row {
+  background: var(--maroon);
+}
+
+/* ---------- Minimal ---------- */
+.inv--minimal {
+  --accent: #202020;
+  --accent-soft: #f6f5f2;
+  font-size: 10pt;
+}
+
+.inv--minimal .inv__title h1 {
+  font-size: 20pt;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--ink);
+}
+
+.inv--minimal .inv__items th {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+  border-bottom: 0.3mm solid var(--ink);
+  color: var(--ink);
+}
+
+.inv--minimal .inv__items td:first-child,
+.inv--minimal .inv__items th:first-child {
+  padding-left: 0;
+}
+
+.inv--minimal .inv__items td:last-child,
+.inv--minimal .inv__items th:last-child {
+  padding-right: 0;
+}
+
+.inv--minimal .inv__total-row {
+  background: transparent;
+  border-top: 0.6mm solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+}
+
+.inv--minimal .inv__total-row span:first-child {
+  color: var(--muted) !important;
+}
+
+.inv--minimal .inv__thanks {
+  color: var(--ink);
+}
+
+/* ---------- Preview scaling & export ---------- */
+.inv-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line-strong, #d6c8af);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px -18px rgba(16, 39, 28, 0.35);
+}
+
+.inv-frame .inv {
+  transform-origin: top left;
+}
+
+/* Off-screen copy used for PDF / PNG / HTML export */
+.inv-export {
+  position: fixed;
+  top: 0;
+  left: -400mm;
+  z-index: -1;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body > *:not(.inv-export) {
+    display: none !important;
+  }
+
+  .inv-export {
+    position: static;
+    left: 0;
+    z-index: auto;
+  }
+
+  .inv {
+    width: 210mm;
+    min-height: 297mm;
+    box-shadow: none;
+  }
+}
