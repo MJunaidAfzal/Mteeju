@@ -1,4 +1,4 @@
-/* Assistant: a full-height dark green panel on the left, launched from the button bottom-right. */
+/* Assistant: a full-height dark green panel on the right, launched from the button bottom-right. */
 .assist-fab {
   position: fixed;
   right: 24px;
@@ -17,6 +17,7 @@
     0 0 0 1px rgba(16, 39, 28, 0.25);
   transition:
     transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.22s ease,
     background 0.2s ease;
 }
@@ -44,6 +45,7 @@
 }
 
 .assist-fab.is-open {
+  right: calc(min(430px, 94vw) + 24px);
   background: radial-gradient(circle at 30% 25%, var(--maroon-600), var(--maroon-800) 72%);
 }
 
@@ -51,18 +53,18 @@
 .assist {
   position: fixed;
   top: 0;
+  right: 0;
   bottom: 0;
-  left: 0;
   z-index: 71;
   display: flex;
   flex-direction: column;
   width: min(430px, 94vw);
   background: var(--green-900);
   color: var(--beige-200);
-  border-right: 1px solid rgba(243, 235, 221, 0.12);
-  box-shadow: 30px 0 60px -30px rgba(0, 0, 0, 0.55);
+  border-left: 1px solid rgba(243, 235, 221, 0.12);
+  box-shadow: -30px 0 60px -30px rgba(0, 0, 0, 0.55);
   overflow: hidden;
-  transform: translateX(-102%);
+  transform: translateX(102%);
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -75,13 +77,13 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 12% 0%, rgba(49, 84, 66, 0.6), transparent 62%);
+  background: radial-gradient(ellipse at 88% 0%, rgba(49, 84, 66, 0.6), transparent 62%);
   pointer-events: none;
 }
 
 .assist__art {
   position: absolute;
-  right: -150px;
+  left: -150px;
   bottom: -160px;
   width: 460px;
   height: 460px;
@@ -492,7 +494,14 @@
 
   .assist {
     width: 100vw;
-    border-right: 0;
+    border-left: 0;
+  }
+
+  /* On a full-screen sheet the header's close button is enough */
+  .assist-fab.is-open {
+    right: 16px;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .assist__body {
