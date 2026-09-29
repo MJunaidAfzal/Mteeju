@@ -122,9 +122,9 @@
 }
 
 .assist__title p {
-  font-family: var(--font-display);
-  font-size: 17px;
-  letter-spacing: 0.035em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   color: var(--beige-200);
 }
 
@@ -184,9 +184,9 @@
 }
 
 .assist__hi {
-  font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.035em;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--beige-200);
 }
 
