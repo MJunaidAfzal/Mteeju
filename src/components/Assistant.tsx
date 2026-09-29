@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, ArrowUp, Check, Loader2, Sparkles, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, BotMessageSquare, Check, Loader2, Trash2, X } from 'lucide-react'
 import InvoiceDocument from './InvoiceDocument'
 import { downloadHtml, downloadPdf, downloadPng } from '../lib/invoiceExport'
 import type { Invoice } from '../lib/invoices'
@@ -214,13 +214,23 @@ export default function Assistant({ userName, onNavigate }: { userName: string; 
         aria-label={open ? 'Close the assistant' : 'Open the assistant'}
         aria-expanded={open}
       >
-        {open ? <X size={22} /> : <Sparkles size={22} />}
+        {open ? <X size={22} /> : <BotMessageSquare size={24} />}
       </button>
 
       <section className={`assist${open ? ' is-open' : ''}`} role="dialog" aria-label="Teeju assistant" aria-hidden={!open}>
+        <svg className="assist__art" viewBox="0 0 460 460" aria-hidden="true">
+          {[90, 140, 190, 240].map((r) => (
+            <circle key={r} cx="300" cy="320" r={r} fill="none" stroke="#e8dcc8" strokeOpacity="0.08" />
+          ))}
+          <circle cx="300" cy="320" r="68" fill="#6b1e2d" fillOpacity="0.55" />
+          <circle cx="300" cy="320" r="68" fill="none" stroke="#e8dcc8" strokeOpacity="0.22" />
+          <line x1="40" y1="320" x2="460" y2="320" stroke="#e8dcc8" strokeOpacity="0.08" />
+          <line x1="300" y1="60" x2="300" y2="460" stroke="#e8dcc8" strokeOpacity="0.08" />
+        </svg>
+
         <header className="assist__head">
           <span className="assist__mark">
-            <Sparkles size={17} />
+            <BotMessageSquare size={19} />
           </span>
           <div className="assist__title">
             <p>Teeju assistant</p>
