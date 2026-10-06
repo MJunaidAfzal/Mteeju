@@ -23,9 +23,19 @@ export interface LeadSettings {
   count: number
   minRating: number
   minReviews: number
-  needPhone: boolean
-  needWebsite: boolean
+  /** 'any' = don't care, 'yes' = must have one, 'no' = must not have one */
+  phone: Presence
+  website: Presence
 }
+
+/** Three-way filter used for phone and website */
+export type Presence = 'any' | 'yes' | 'no'
+
+export const PRESENCE_OPTIONS: { id: Presence; phone: string; website: string }[] = [
+  { id: 'any', phone: 'Phone: any', website: 'Website: any' },
+  { id: 'yes', phone: 'Has a phone', website: 'Has a website' },
+  { id: 'no', phone: 'No phone', website: 'No website' },
+]
 
 export const DEFAULT_SETTINGS: LeadSettings = {
   country: '',
@@ -34,8 +44,8 @@ export const DEFAULT_SETTINGS: LeadSettings = {
   count: 20,
   minRating: 0,
   minReviews: 0,
-  needPhone: false,
-  needWebsite: false,
+  phone: 'any',
+  website: 'any',
 }
 
 export const COUNTRIES = countries as Country[]
@@ -65,8 +75,12 @@ export function isLeadFinderEndpoint(service: ApiService, endpoint: ApiEndpoint)
 }
 
 export function readSettings(endpoint: ApiEndpoint): LeadSettings {
-  const saved = (endpoint.settings?.leadFinder ?? {}) as Partial<LeadSettings>
-  return { ...DEFAULT_SETTINGS, ...saved }
+  const saved = (endpoint.settings?.leadFinder ?? {}) as Partial<LeadSettings> & { needPhone?: boolean; needWebsite?: boolean }
+  const settings = { ...DEFAULT_SETTINGS, ...saved }
+  // Choices saved by the earlier checkbox version
+  if (!saved.phone && saved.needPhone) settings.phone = 'yes'
+  if (!saved.website && saved.needWebsite) settings.website = 'yes'
+  return settings
 }
 
 /* ---------- Cities (loaded per country from /public/geo/cities) ---------- */
@@ -118,7 +132,7 @@ function pointsAround(lat: number, lng: number, max: number) {
   return points.slice(0, max)
 }
 
-export const hasFilters = (s: LeadSettings) => s.minRating > 0 || s.minReviews > 0 || s.needPhone || s.needWebsite
+export const hasFilters = (s: LeadSettings) => s.minRating > 0 || s.minReviews > 0 || s.phone !== 'any' || s.website !== 'any'
 
 /** How many searches to plan: ~20 places per search, some repeats, more when filters drop places. */
 export function requestBudget(settings: LeadSettings) {
@@ -254,8 +268,8 @@ export async function runLeadSearch(
     return rows.filter((r) => {
       if (settings.minRating > 0 && fields.rating && !(toNumber(r[fields.rating]) >= settings.minRating)) return false
       if (settings.minReviews > 0 && fields.reviews && !(toNumber(r[fields.reviews]) >= settings.minReviews)) return false
-      if (settings.needPhone && fields.phone && !VALIDATORS.phone!(r[fields.phone])) return false
-      if (settings.needWebsite && fields.website && !VALIDATORS.website!(r[fields.website])) return false
+      if (settings.phone !== 'any' && fields.phone && VALIDATORS.phone!(r[fields.phone]) !== (settings.phone === 'yes')) return false
+      if (settings.website !== 'any' && fields.website && VALIDATORS.website!(r[fields.website]) !== (settings.website === 'yes')) return false
       return true
     })
   }
@@ -310,8 +324,8 @@ export async function runLeadSearch(
   const skippedFilters: string[] = []
   if (settings.minRating > 0 && !fields.rating) skippedFilters.push('minimum rating')
   if (settings.minReviews > 0 && !fields.reviews) skippedFilters.push('minimum reviews')
-  if (settings.needPhone && !fields.phone) skippedFilters.push('has phone')
-  if (settings.needWebsite && !fields.website) skippedFilters.push('has website')
+  if (settings.phone !== 'any' && !fields.phone) skippedFilters.push(settings.phone === 'yes' ? 'has a phone' : 'no phone')
+  if (settings.website !== 'any' && !fields.website) skippedFilters.push(settings.website === 'yes' ? 'has a website' : 'no website')
 
   // Put the most useful columns first
   const lead = (r: Row): Row => {

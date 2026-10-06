@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { fetchServices } from './apiStore'
 import { sendRequest } from './rapidapi'
-import { isLeadFinderEndpoint, loadCities, countryName, runLeadSearch, COUNTRIES, type LeadSettings } from './leads'
+import { isLeadFinderEndpoint, loadCities, countryName, runLeadSearch, COUNTRIES, type LeadSettings, type Presence } from './leads'
 import { findRecords, flatten } from './tableize'
 import {
   ACCENTS,
@@ -163,8 +163,8 @@ export const TOOL_DECLARATIONS = [
         count: { type: 'number', description: 'How many leads to collect (default 20)' },
         min_rating: { type: 'number' },
         min_reviews: { type: 'number' },
-        needs_phone: { type: 'boolean' },
-        needs_website: { type: 'boolean' },
+        phone: { type: 'string', enum: ['any', 'yes', 'no'], description: '"yes" = only places with a phone, "no" = only places without one' },
+        website: { type: 'string', enum: ['any', 'yes', 'no'], description: '"yes" = only places with a website, "no" = only places without one' },
       },
       required: ['niche', 'country'],
     },
@@ -208,6 +208,9 @@ export interface PreparedTool {
   danger: boolean
   run: () => Promise<Record<string, unknown>>
 }
+
+/** Accepts 'yes' / 'no' / 'any', and the older true/false form */
+const presence = (value: unknown): Presence => (value === true || value === 'yes' ? 'yes' : value === 'no' ? 'no' : 'any')
 
 const arg = <T>(args: Record<string, unknown> | undefined, key: string, fallback: T): T =>
   args && args[key] !== undefined && args[key] !== null ? (args[key] as T) : fallback
@@ -418,8 +421,8 @@ export async function prepareTool(name: string, args: Record<string, unknown> | 
         count: Math.max(1, Math.min(500, Number(arg(args, 'count', 20)) || 20)),
         minRating: Number(arg(args, 'min_rating', 0)) || 0,
         minReviews: Number(arg(args, 'min_reviews', 0)) || 0,
-        needPhone: Boolean(arg(args, 'needs_phone', false)),
-        needWebsite: Boolean(arg(args, 'needs_website', false)),
+        phone: presence(args?.phone ?? args?.needs_phone),
+        website: presence(args?.website ?? args?.needs_website),
       }
       return {
         title: `Find ${settings.count} leads`,
@@ -428,8 +431,8 @@ export async function prepareTool(name: string, args: Record<string, unknown> | 
           `${settings.niche} in ${city ? `${city.name}, ` : ''}${countryName(country.code)}`,
           settings.minRating ? `Rating ${settings.minRating}+` : '',
           settings.minReviews ? `${settings.minReviews}+ reviews` : '',
-          settings.needPhone ? 'Must have a phone' : '',
-          settings.needWebsite ? 'Must have a website' : '',
+          settings.phone === 'any' ? '' : settings.phone === 'yes' ? 'Must have a phone' : 'Must have no phone',
+          settings.website === 'any' ? '' : settings.website === 'yes' ? 'Must have a website' : 'Must have no website',
           'This uses your RapidAPI quota.',
         ].filter(Boolean),
         run: async () => {

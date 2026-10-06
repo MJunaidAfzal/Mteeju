@@ -10,6 +10,7 @@ import {
   COUNTRIES,
   MAX_LEADS,
   NICHE_SUGGESTIONS,
+  PRESENCE_OPTIONS,
   buildQuery,
   countryName,
   hasFilters,
@@ -22,6 +23,7 @@ import {
   type LeadProgress,
   type LeadRun,
   type LeadSettings,
+  type Presence,
 } from '../lib/leads'
 import settingsSql from '../../supabase/migrations/20260919010000_api_endpoint_settings.sql?raw'
 
@@ -240,13 +242,25 @@ export default function LeadFinder({ service, endpoint, onSettingsChange, onQuer
             ))}
           </select>
         </label>
-        <label className="lead-check">
-          <input type="checkbox" checked={settings.needPhone} onChange={(e) => update({ needPhone: e.target.checked })} />
-          Has a phone number
+        <label className="lead-field">
+          <span>Phone number</span>
+          <select className="api-input" value={settings.phone} onChange={(e) => update({ phone: e.target.value as Presence })}>
+            {PRESENCE_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.phone}
+              </option>
+            ))}
+          </select>
         </label>
-        <label className="lead-check">
-          <input type="checkbox" checked={settings.needWebsite} onChange={(e) => update({ needWebsite: e.target.checked })} />
-          Has a website
+        <label className="lead-field">
+          <span>Website</span>
+          <select className="api-input" value={settings.website} onChange={(e) => update({ website: e.target.value as Presence })}>
+            {PRESENCE_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.website}
+              </option>
+            ))}
+          </select>
         </label>
       </fieldset>
 

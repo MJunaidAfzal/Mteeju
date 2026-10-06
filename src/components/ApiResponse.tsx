@@ -93,7 +93,12 @@ export default function ApiResponse({ result, fileName }: { result: ApiResult; f
             </div>
           )}
           {showTable ? (
-            <button type="button" className="btn btn--secondary btn--sm" onClick={downloadCsv}>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={downloadCsv}
+              title={`Downloads the ${filtered.length} row${filtered.length === 1 ? '' : 's'} shown`}
+            >
               <Download size={14} /> CSV
             </button>
           ) : (
@@ -118,6 +123,7 @@ export default function ApiResponse({ result, fileName }: { result: ApiResult; f
                       from <code>{table.source}</code>
                     </>
                   )}
+                  {' · CSV saves what is shown'}
                 </>
               ) : (
                 <>
