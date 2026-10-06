@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { ChevronDown, FileText, LayoutGrid, LogOut, Menu, Plug, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, FileText, LayoutGrid, LogOut, Megaphone, Menu, Plug, X, type LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import BrandMark from '../components/BrandMark'
 import ConnectionStatus from '../components/ConnectionStatus'
 import Overview from './Overview'
 import Apis from './Apis'
 import Invoices from './Invoices'
+import Social from './Social'
 import Assistant from '../components/Assistant'
 import './Dashboard.css'
 
-type SectionId = 'dashboard' | 'apis' | 'invoices'
+type SectionId = 'dashboard' | 'apis' | 'invoices' | 'social'
 
 interface NavItem {
   id: SectionId
@@ -22,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { id: 'apis', label: 'APIs', icon: Plug },
   { id: 'invoices', label: 'Invoices', icon: FileText },
+  { id: 'social', label: 'Social', icon: Megaphone },
 ]
 
 function displayName(user: User) {
@@ -177,7 +179,7 @@ export default function Dashboard({ session }: { session: Session }) {
         </header>
 
         <main className="dash-content">
-          {active === 'apis' ? <Apis user={user} /> : active === 'invoices' ? <Invoices /> : <Overview name={name} />}
+          {active === 'apis' ? <Apis user={user} /> : active === 'invoices' ? <Invoices /> : active === 'social' ? <Social /> : <Overview name={name} />}
         </main>
 
         <Assistant userName={name} onNavigate={(page) => go(page)} />
