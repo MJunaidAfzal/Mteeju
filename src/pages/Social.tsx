@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CalendarDays,
@@ -21,6 +21,7 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
+  Upload,
   Users,
   WandSparkles,
   X,
@@ -48,6 +49,7 @@ import {
   savePost,
   testAccount,
   toLocalInput,
+  uploadMedia,
   writeWithAi,
   type MediaItem,
   type PlatformId,
@@ -77,7 +79,7 @@ const STATUS_CLASS: Record<PostStatus, string> = {
 }
 
 const AI_ACTIONS = [
-  { id: 'write', label: 'Write it for me', prompt: 'Write a short, friendly social media post about the topic in the draft. Keep it under 300 characters.' },
+  { id: 'write', label: 'Write it for me', prompt: 'Write a short, friendly social media post about the attached media if there is any, otherwise about the topic in the draft. Keep it under 300 characters.' },
   { id: 'improve', label: 'Improve', prompt: 'Rewrite this post so it reads better and feels natural. Keep the same meaning and language.' },
   { id: 'shorten', label: 'Shorten', prompt: 'Shorten this post to under 200 characters without losing the point.' },
   { id: 'hashtags', label: 'Add hashtags', prompt: 'Keep the post as it is and add 4-6 relevant hashtags on a new line at the end.' },
@@ -148,6 +150,7 @@ export default function Social() {
   const [draft, setDraft] = useState<SocialPost>(() => emptyPost())
   const [editing, setEditing] = useState(false)
   const [mediaUrl, setMediaUrl] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
 
   // Posts tab
@@ -323,7 +326,11 @@ export default function Social() {
     setBusy(`ai:${action.id}`)
     setNote(null)
     try {
-      update({ content: await writeWithAi(action.prompt, fullText(draft)) })
+      const { text, sawMedia } = await writeWithAi(action.prompt, fullText(draft), draft.media)
+      update({ content: text })
+      if (draft.media.length > 0 && !sawMedia) {
+        setNote({ kind: 'error', text: 'The assistant could not open the media from its link, so it wrote from the text only. Uploaded files can always be read.' })
+      }
     } catch (err) {
       setNote({ kind: 'error', text: err instanceof Error ? err.message : 'The writing helper failed.' })
     } finally {
@@ -337,6 +344,22 @@ export default function Social() {
     const type: MediaItem['type'] = /\.(mp4|mov|webm)(\?|$)/i.test(url) ? 'video' : 'image'
     update({ media: [...draft.media, { url, type }] })
     setMediaUrl('')
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) return
+    setBusy('upload')
+    setNote(null)
+    try {
+      for (const file of files) {
+        const item = await uploadMedia(file)
+        setDraft((d) => ({ ...d, media: [...d.media, item] }))
+      }
+    } catch (err) {
+      setNote({ kind: 'error', text: err instanceof Error ? err.message : 'The upload failed.' })
+    } finally {
+      setBusy('')
+    }
   }
 
   /* ---------- Accounts ---------- */
@@ -373,7 +396,9 @@ export default function Social() {
     setNote(null)
     try {
       await testAccount(account.id)
-      setNote({ kind: 'ok', text: `Test message sent to ${account.label}.` })
+      // Facebook and Instagram only check the token, so nothing lands on the public feed
+      const checkOnly = account.platform === 'facebook' || account.platform === 'instagram'
+      setNote({ kind: 'ok', text: checkOnly ? `${account.label} is connected and ready to post.` : `Test message sent to ${account.label}.` })
     } catch (err) {
       setNote({ kind: 'error', text: err instanceof Error ? err.message : 'The test failed.' })
     } finally {
@@ -561,6 +586,56 @@ export default function Social() {
             </div>
 
             <div className="soc-field">
+              <span>Media link</span>
+              <div className="soc-media-add">
+                <input
+                  className="api-input"
+                  placeholder="https://… image or video"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addMedia()
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn--secondary btn--sm" onClick={addMedia}>
+                  <Link2 size={14} /> Add
+                </button>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => fileInput.current?.click()} disabled={busy === 'upload'}>
+                  {busy === 'upload' ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Upload
+                </button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? [])
+                    // cleared so the same file can be picked again
+                    e.target.value = ''
+                    void uploadFiles(files)
+                  }}
+                />
+              </div>
+            </div>
+
+            {draft.media.length > 0 && (
+              <div className="soc-media">
+                {draft.media.map((m) => (
+                  <div key={m.url} className="soc-media__item">
+                    {m.type === 'video' ? <span className="soc-media__video">Video</span> : <img src={m.url} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+                    <button type="button" className="api-icon-btn api-icon-btn--danger" onClick={() => update({ media: draft.media.filter((x) => x.url !== m.url) })} aria-label="Remove">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="soc-field">
               <div className="soc-field__row">
                 <span>Post</span>
                 <span className={`soc-count${used > limit ? ' is-over' : ''}`}>
@@ -584,45 +659,10 @@ export default function Social() {
               </div>
             </div>
 
-            <div className="soc-grid">
-              <label className="soc-field">
-                <span>Hashtags</span>
-                <input className="api-input" placeholder="#teeju #karachi" value={draft.tags} onChange={(e) => update({ tags: e.target.value })} />
-              </label>
-              <div className="soc-field">
-                <span>Media link</span>
-                <div className="soc-media-add">
-                  <input
-                    className="api-input"
-                    placeholder="https://… image or video"
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addMedia()
-                      }
-                    }}
-                  />
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={addMedia}>
-                    <Link2 size={14} /> Add
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {draft.media.length > 0 && (
-              <div className="soc-media">
-                {draft.media.map((m) => (
-                  <div key={m.url} className="soc-media__item">
-                    {m.type === 'video' ? <span className="soc-media__video">Video</span> : <img src={m.url} alt="" loading="lazy" referrerPolicy="no-referrer" />}
-                    <button type="button" className="api-icon-btn api-icon-btn--danger" onClick={() => update({ media: draft.media.filter((x) => x.url !== m.url) })} aria-label="Remove">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <label className="soc-field">
+              <span>Hashtags</span>
+              <input className="api-input" placeholder="#teeju #karachi" value={draft.tags} onChange={(e) => update({ tags: e.target.value })} />
+            </label>
 
             <div className="soc-grid">
               <label className="soc-field">
@@ -847,7 +887,7 @@ export default function Social() {
             <header className="card__head">
               <div>
                 <h2 className="card__title">Connected accounts</h2>
-                <p className="card__sub">Telegram, Discord and webhooks post for real. The others are preview-only until their developer app is ready.</p>
+                <p className="card__sub">Telegram, Discord, Facebook, Instagram and webhooks post for real. The others are preview-only until their developer app is ready.</p>
               </div>
               <button
                 type="button"
@@ -943,6 +983,7 @@ export default function Social() {
                   <input
                     className="api-input"
                     placeholder={platform(accountForm.platform).handlePlaceholder}
+                    autoComplete="off"
                     value={accountForm.handle}
                     onChange={(e) => setAccountForm({ ...accountForm, handle: e.target.value })}
                   />
@@ -954,6 +995,8 @@ export default function Social() {
                       className="api-input api-input--mono"
                       type={field.secret ? 'password' : 'text'}
                       placeholder={field.placeholder}
+                      // Stops the browser from filling in the portal's own login here
+                      autoComplete={field.secret ? 'new-password' : 'off'}
                       value={accountForm.config[field.key] ?? ''}
                       onChange={(e) => setAccountForm({ ...accountForm, config: { ...accountForm.config, [field.key]: e.target.value } })}
                     />

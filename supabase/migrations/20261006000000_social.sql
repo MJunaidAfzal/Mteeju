@@ -8,6 +8,7 @@ create table if not exists public.social_accounts (
   label text not null default '',
   handle text not null default '',
   -- Telegram: { botToken, chatId } · Discord: { webhookUrl } · Webhook: { url }
+  -- Facebook: { pageToken } · Instagram: { igUserId, accessToken }
   config jsonb not null default '{}'::jsonb check (jsonb_typeof(config) = 'object'),
   active boolean not null default true,
   created_at timestamptz not null default now(),

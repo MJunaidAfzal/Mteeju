@@ -3,8 +3,9 @@
 // Deploy (Dashboard → Edge Functions → Deploy a new function → Via Editor), or:
 //   npx supabase functions deploy social-publish
 //
-// Works today for: telegram (bot), discord (webhook), webhook (any URL — Zapier / Make / n8n).
-// Facebook, Instagram, X, LinkedIn, TikTok and YouTube need their own developer apps; those
+// Works today for: telegram (bot), discord (webhook), webhook (any URL — Zapier / Make / n8n),
+// facebook (Page access token) and instagram (Business account + access token).
+// X, LinkedIn, Threads, TikTok and YouTube need their own developer apps; those
 // accounts are reported back as "not connected" instead of silently appearing to succeed.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
@@ -27,11 +28,17 @@ interface Account {
   active: boolean
 }
 
+interface Media {
+  url: string
+  type?: string
+}
+
 interface PostRow {
   id: string
   content: string
-  media: { url: string; type?: string }[]
+  media: Media[]
   account_ids: string[]
+  tags: string | null
   status: string
 }
 
@@ -89,9 +96,78 @@ async function publishWebhook(account: Account, text: string, media: { url: stri
   return { accountId: account.id, ok: true }
 }
 
+const GRAPH = 'https://graph.facebook.com/v24.0'
+
+/** Calls the Meta Graph API and returns its JSON, or throws Meta's own error message. */
+async function graph(path: string, token: string, params?: Record<string, string>) {
+  const res = params
+    ? await fetch(`${GRAPH}/${path}`, { method: 'POST', body: new URLSearchParams({ ...params, access_token: token }) })
+    : await fetch(`${GRAPH}/${path}${path.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Meta returned ${res.status}.`)
+  return data
+}
+
+const isVideo = (item?: Media) => item?.type === 'video'
+
+// With a Page access token, "me" is the Page itself.
+async function publishFacebook(account: Account, text: string, media: Media[], test: boolean): Promise<Result> {
+  const token = account.config.pageToken?.trim()
+  if (!token) return { accountId: account.id, ok: false, error: 'Page access token is missing.' }
+
+  // Testing only checks the token, so nothing appears on the public Page
+  if (test) {
+    await graph('me?fields=id,name', token)
+    return { accountId: account.id, ok: true }
+  }
+
+  const first = media[0]
+  const data = !first
+    ? await graph('me/feed', token, { message: text })
+    : isVideo(first)
+      ? await graph('me/videos', token, { file_url: first.url, description: text })
+      : await graph('me/photos', token, { url: first.url, caption: text })
+
+  const id = data.post_id ?? data.id
+  return { accountId: account.id, ok: true, link: id ? `https://www.facebook.com/${id}` : undefined }
+}
+
+async function publishInstagram(account: Account, text: string, media: Media[], test: boolean): Promise<Result> {
+  const token = account.config.accessToken?.trim()
+  const userId = account.config.igUserId?.trim()
+  if (!token || !userId) return { accountId: account.id, ok: false, error: 'Instagram user ID or access token is missing.' }
+
+  if (test) {
+    await graph(`${userId}?fields=username`, token)
+    return { accountId: account.id, ok: true }
+  }
+
+  const first = media[0]
+  if (!first) return { accountId: account.id, ok: false, error: 'Instagram posts need an image or a video.' }
+
+  const container = await graph(
+    `${userId}/media`,
+    token,
+    isVideo(first) ? { media_type: 'REELS', video_url: first.url, caption: text } : { image_url: first.url, caption: text },
+  )
+
+  // Instagram downloads the file first; videos can take a while
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const { status_code: status } = await graph(`${container.id}?fields=status_code`, token)
+    if (status === 'FINISHED') break
+    if (status === 'ERROR' || status === 'EXPIRED') return { accountId: account.id, ok: false, error: 'Instagram could not process the media file.' }
+    if (attempt === 29) return { accountId: account.id, ok: false, error: 'Instagram is still processing the media. Try again shortly.' }
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+  }
+
+  const published = await graph(`${userId}/media_publish`, token, { creation_id: container.id })
+  const { permalink } = await graph(`${published.id}?fields=permalink`, token).catch(() => ({ permalink: undefined }))
+  return { accountId: account.id, ok: true, link: permalink }
+}
+
 const NEEDS_APP = 'This network needs its own developer app and approved API access before posts can be sent.'
 
-async function publishTo(account: Account, text: string, media: { url: string }[]): Promise<Result> {
+async function publishTo(account: Account, text: string, media: Media[], test = false): Promise<Result> {
   try {
     switch (account.platform) {
       case 'telegram':
@@ -100,6 +176,10 @@ async function publishTo(account: Account, text: string, media: { url: string }[
         return await publishDiscord(account, text, media)
       case 'webhook':
         return await publishWebhook(account, text, media)
+      case 'facebook':
+        return await publishFacebook(account, text, media, test)
+      case 'instagram':
+        return await publishInstagram(account, text, media, test)
       default:
         return { accountId: account.id, ok: false, error: NEEDS_APP }
     }
@@ -132,7 +212,7 @@ Deno.serve(async (req) => {
     const { data: account, error } = await supabase.from('social_accounts').select('*').eq('id', payload.test.accountId).maybeSingle()
     if (error) return json({ error: error.message }, 400)
     if (!account) return json({ error: 'That account was not found.' }, 404)
-    const result = await publishTo(account as Account, payload.test.text || 'Test message from Teeju 👋', [])
+    const result = await publishTo(account as Account, payload.test.text || 'Test message from Teeju 👋', [], true)
     return result.ok ? json({ ok: true }) : json({ error: result.error ?? 'The test failed.' }, 400)
   }
 
@@ -149,9 +229,13 @@ Deno.serve(async (req) => {
   const { data: accounts, error: accountsError } = await supabase.from('social_accounts').select('*').in('id', ids)
   if (accountsError) return json({ error: accountsError.message }, 400)
 
+  // Same text the composer previews: the post, then its hashtags
+  const tags = row.tags?.trim()
+  const text = tags ? `${row.content}\n\n${tags}` : row.content
+
   const results: Result[] = []
   for (const account of (accounts ?? []) as Account[]) {
-    results.push(await publishTo(account, row.content, Array.isArray(row.media) ? row.media : []))
+    results.push(await publishTo(account, text, Array.isArray(row.media) ? row.media : []))
   }
   for (const id of ids) {
     if (!results.some((r) => r.accountId === id)) results.push({ accountId: id, ok: false, error: 'That account no longer exists.' })

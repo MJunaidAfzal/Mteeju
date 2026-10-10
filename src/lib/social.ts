@@ -80,20 +80,40 @@ export const PLATFORMS: Platform[] = [
     name: 'Facebook',
     colour: '#1877F2',
     limit: 63206,
-    live: false,
+    live: true,
     handlePlaceholder: 'Your Page name',
-    fields: [{ key: 'pageToken', label: 'Page access token', placeholder: 'EAAG…', secret: true }],
-    setup: 'Needs a Meta app with pages_manage_posts, reviewed by Meta.',
+    fields: [
+      {
+        key: 'pageToken',
+        label: 'Page access token',
+        placeholder: 'EAAG…',
+        secret: true,
+        help: 'From your Meta app: the access_token of your Page in /me/accounts. Needs pages_manage_posts.',
+      },
+    ],
   },
   {
     id: 'instagram',
     name: 'Instagram',
     colour: '#E1306C',
     limit: 2200,
-    live: false,
+    live: true,
     handlePlaceholder: '@yourbrand',
-    fields: [{ key: 'igUserId', label: 'Instagram user ID', placeholder: '1784…' }],
-    setup: 'Needs a Business account linked to a Facebook Page plus an approved Meta app.',
+    fields: [
+      {
+        key: 'igUserId',
+        label: 'Instagram user ID',
+        placeholder: '1784…',
+        help: 'The instagram_business_account id of the Facebook Page linked to your Business or Creator account.',
+      },
+      {
+        key: 'accessToken',
+        label: 'Access token',
+        placeholder: 'EAAG…',
+        secret: true,
+        help: 'The linked Page’s access token, with instagram_content_publish. Every post needs an image or a video.',
+      },
+    ],
   },
   {
     id: 'x',
@@ -317,6 +337,54 @@ export async function deletePost(id: string) {
   if (error) fail(error)
 }
 
+/* ---------- Media uploads ---------- */
+
+const MEDIA_BUCKET = 'social-media'
+
+/** Instagram only accepts JPEG pictures, so PNG, WebP and the like are converted first. */
+async function toJpeg(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('This browser could not prepare the image.')
+  // JPEG has no transparency
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('This browser could not prepare the image.'))), 'image/jpeg', 0.92),
+  )
+}
+
+/** Stores a picture or video in Supabase Storage and returns its public link. */
+export async function uploadMedia(file: File): Promise<MediaItem> {
+  const isVideo = file.type.startsWith('video/')
+  if (!isVideo && !file.type.startsWith('image/')) throw new Error(`"${file.name}" is not an image or a video.`)
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('You must be signed in to upload.')
+
+  const asIs = isVideo || file.type === 'image/jpeg' || file.type === 'image/gif'
+  const body = asIs ? file : await toJpeg(file)
+  const named = file.name.split('.').pop()?.toLowerCase() ?? ''
+  const extension = asIs ? (/^[a-z0-9]{1,5}$/.test(named) ? named : isVideo ? 'mp4' : 'jpg') : 'jpg'
+  const path = `${user.id}/${crypto.randomUUID()}.${extension}`
+
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, body, { contentType: asIs ? file.type : 'image/jpeg', cacheControl: '31536000' })
+  if (error) {
+    if (/bucket not found/i.test(error.message)) {
+      throw new Error('Uploads need the "social-media" storage bucket. Run supabase/migrations/20261010000000_social_media_storage.sql in Supabase → SQL Editor.')
+    }
+    throw new Error(error.message)
+  }
+  return { url: supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl, type: isVideo ? 'video' : 'image' }
+}
+
 /* ---------- Publishing ---------- */
 
 async function callPublish(body: Record<string, unknown>) {
@@ -344,11 +412,79 @@ export const testAccount = (accountId: string, text = 'Test message from Teeju �
 
 /* ---------- Writing help (uses the assistant's Gemini function) ---------- */
 
-export async function writeWithAi(instruction: string, draft: string): Promise<string> {
-  const prompt = `${instruction}\n\nPost draft:\n"""${draft || '(empty)'}"""\n\nReply with the post text only — no quotes, no explanation.`
+/** A small JPEG of a picture or video frame, base64 without the data: prefix. */
+function snapshot(source: CanvasImageSource, width: number, height: number) {
+  const scale = Math.min(1, 1024 / Math.max(width, height, 1))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(width * scale))
+  canvas.height = Math.max(1, Math.round(height * scale))
+  canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/jpeg', 0.8).split(',')[1]
+}
+
+async function imageShot(url: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('The picture could not be opened.')
+  const bitmap = await createImageBitmap(await res.blob())
+  const shot = snapshot(bitmap, bitmap.width, bitmap.height)
+  bitmap.close()
+  return shot
+}
+
+/** Three frames from the start, middle and end stand in for the whole video. */
+async function videoShots(url: string) {
+  const video = document.createElement('video')
+  video.crossOrigin = 'anonymous'
+  video.muted = true
+  video.preload = 'auto'
+  const wait = (event: 'loadeddata' | 'seeked') =>
+    new Promise<void>((resolve, reject) => {
+      video.addEventListener(event, () => resolve(), { once: true })
+      video.addEventListener('error', () => reject(new Error('The video could not be opened.')), { once: true })
+      window.setTimeout(() => reject(new Error('The video took too long to open.')), 15000)
+    })
+
+  const loaded = wait('loadeddata')
+  video.src = url
+  await loaded
+
+  const shots: string[] = []
+  const duration = Number.isFinite(video.duration) ? video.duration : 0
+  for (const at of duration > 1 ? [0.1, 0.5, 0.9] : [0]) {
+    const seeked = wait('seeked')
+    video.currentTime = duration * at
+    await seeked
+    shots.push(snapshot(video, video.videoWidth, video.videoHeight))
+  }
+  video.removeAttribute('src')
+  video.load()
+  return shots
+}
+
+/** What the assistant gets to look at: up to three files; ones the browser cannot open are left out. */
+async function mediaShots(media: MediaItem[]) {
+  const shots: string[] = []
+  for (const item of media.slice(0, 3)) {
+    try {
+      if (item.type === 'video') shots.push(...(await videoShots(item.url)))
+      else shots.push(await imageShot(item.url))
+    } catch {
+      // usually a link on another site that does not allow reading its files
+    }
+  }
+  return shots
+}
+
+/** Writes or rewrites the post. With media attached, the assistant looks at it first; `sawMedia` says whether it could. */
+export async function writeWithAi(instruction: string, draft: string, media: MediaItem[] = []): Promise<{ text: string; sawMedia: boolean }> {
+  const shots = await mediaShots(media)
+  const look = shots.length
+    ? 'The attached pictures are the media of this post (a video is shown as a few of its frames). Look at them and base the post on what they show.\n\n'
+    : ''
+  const prompt = `${look}${instruction}\n\nPost draft:\n"""${draft || '(empty)'}"""\n\nReply with the post text only — no quotes, no explanation.`
   const { data, error } = await supabase.functions.invoke('ai-agent', {
     body: {
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [...shots.map((data) => ({ inlineData: { mimeType: 'image/jpeg', data } })), { text: prompt }] }],
       systemInstruction: { parts: [{ text: 'You write short, natural social media posts for a small business. Keep the writer’s language and voice.' }] },
     },
   })
@@ -357,5 +493,5 @@ export async function writeWithAi(instruction: string, draft: string): Promise<s
   const parts = (data?.content?.parts ?? []) as { text?: string }[]
   const text = parts.map((p) => p.text ?? '').join('').trim()
   if (!text) throw new Error('The assistant did not return any text.')
-  return text
+  return { text, sawMedia: shots.length > 0 }
 }
