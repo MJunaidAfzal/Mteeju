@@ -24,7 +24,7 @@ import {
   type TemplateId,
 } from './invoices'
 
-export type PageId = 'dashboard' | 'apis' | 'invoices'
+export type PageId = 'dashboard' | 'apis' | 'invoices' | 'social' | 'leads' | 'outreach'
 
 export interface AgentContext {
   /** Opens a page in the portal */
@@ -49,10 +49,13 @@ export interface GeminiContent {
 
 export const SYSTEM_PROMPT = `You are the Teeju assistant, built into the Teeju business portal. You help the owner get things done inside the portal.
 
-The portal has three pages:
+The portal has these pages:
 - Dashboard: a greeting and the Supabase connection status.
 - APIs: saved RapidAPI services. Requests go through a secure Supabase proxy. The Google Map Scraper endpoint has a Lead Finder that searches a country/city for a niche and collects business leads (name, phone, website, rating...).
 - Invoices: create, save, edit and download invoices. Nine templates (classic, modern, minimal, luxe, bold, compact, noir, royal, onyx — the last four are black & gold) and colour options. Invoices are saved in the user's own Supabase database and can be downloaded as PDF, PNG or HTML.
+- Social: write a post, preview it per network, schedule it on a calendar and track accounts and insights.
+- Leads: import a CSV of businesses, save them in the database, then enrich them to find emails, extra phone numbers and social profiles.
+- Outreach: campaigns that work through those leads over several days. Email is sent automatically from the owner's Gmail; WhatsApp messages wait in a list to be sent with one click. A lead that replies is dropped from the campaign.
 
 How to behave:
 - Use the tools to actually do the work. Never say a task is done unless a tool returned success.
@@ -191,7 +194,7 @@ export const TOOL_DECLARATIONS = [
     description: 'Open a page of the portal for the user.',
     parameters: {
       type: 'object',
-      properties: { page: { type: 'string', enum: ['dashboard', 'apis', 'invoices'] } },
+      properties: { page: { type: 'string', enum: ['dashboard', 'apis', 'invoices', 'social', 'leads', 'outreach'] } },
       required: ['page'],
     },
   },

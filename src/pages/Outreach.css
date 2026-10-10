@@ -1,0 +1,378 @@
+/* ---------- Outreach campaigns ---------- */
+/* .api-input is a fixed-height control; a message needs room to breathe. */
+.out-editor textarea.api-input {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.55;
+}
+
+.out-editor {
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 3px rgba(35, 75, 58, 0.08);
+}
+
+.out-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.out-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.out-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.out-field--wide {
+  margin-top: 14px;
+}
+
+.out-hours {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.out-hours select {
+  flex: 1;
+  min-width: 0;
+}
+
+.out-hours span {
+  font-size: 12.5px;
+  color: var(--ink-400);
+}
+
+/* Steps */
+.out-steps {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 14px;
+}
+
+.out-step {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--beige-100);
+}
+
+.out-step__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.out-step__badge {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--green-800);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--beige-100);
+}
+
+.out-step__day {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-700);
+}
+
+.out-step__day input {
+  width: 72px;
+}
+
+.out-step__channel {
+  width: 130px;
+}
+
+.out-step__head .api-icon-btn {
+  margin-left: auto;
+}
+
+.out-step__body {
+  min-height: 140px;
+  font-family: var(--font-sans);
+  resize: vertical;
+}
+
+.out-preview {
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.out-preview summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500);
+  cursor: pointer;
+}
+
+.out-preview__subject {
+  margin: 10px 0 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.out-preview__body {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-700);
+  white-space: pre-wrap;
+}
+
+.out-add {
+  justify-self: start;
+}
+
+/* ---------- Email sender check ---------- */
+.out-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.out-check__body {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.out-check__form {
+  display: flex;
+  flex: 0 1 380px;
+  gap: 8px;
+}
+
+.out-check__form .api-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.out-check__result {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--maroon-700);
+}
+
+.out-check__result.is-ok {
+  color: var(--green-700);
+}
+
+/* ---------- WhatsApp queue ---------- */
+.out-wa {
+  border-color: var(--line-strong);
+}
+
+.out-wa__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.out-wa__item {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--beige-100);
+}
+
+.out-wa__who {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.out-wa__text {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-500);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.out-wa__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Campaign cards ---------- */
+.out-list {
+  display: grid;
+  gap: 16px;
+}
+
+.out-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.out-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.out-chip--draft {
+  background: var(--beige-200);
+  color: var(--ink-500);
+}
+
+.out-chip--running {
+  background: var(--green-800);
+  color: var(--beige-100);
+}
+
+.out-chip--paused {
+  background: var(--beige-400);
+  color: var(--ink-800);
+}
+
+.out-chip--done {
+  background: var(--maroon-700);
+  color: var(--beige-100);
+}
+
+.out-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+.out-numbers strong {
+  font-size: 15px;
+  color: var(--ink-900);
+}
+
+.out-numbers__bad strong {
+  color: var(--maroon-700);
+}
+
+.out-bar {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--beige-300);
+}
+
+.out-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green-700);
+  transition: width 0.3s ease;
+}
+
+.out-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.out-card__actions .api-icon-btn {
+  margin-left: auto;
+}
+
+/* Message log */
+.out-queue {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.out-queue table {
+  min-width: 720px;
+}
+
+.out-queue__to {
+  overflow-wrap: anywhere;
+}
+
+.out-queue__error {
+  display: block;
+  font-size: 11.5px;
+  color: var(--maroon-700);
+}
+
+.out-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.out-dot--sent {
+  background: var(--green-700);
+}
+
+.out-dot--failed {
+  background: var(--maroon-600);
+}
+
+.out-dot--pending {
+  background: var(--beige-400);
+}
+
+.out-more {
+  padding-top: 10px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+  .out-wa__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .out-wa__actions {
+    flex-wrap: wrap;
+  }
+
+  .out-step__channel {
+    width: 100%;
+  }
+}

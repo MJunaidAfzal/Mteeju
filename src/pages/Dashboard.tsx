@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { ChevronDown, FileText, LayoutGrid, LogOut, Megaphone, Menu, Plug, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, FileText, LayoutGrid, LogOut, Megaphone, Menu, Plug, Send, Users, X, type LucideIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import BrandMark from '../components/BrandMark'
 import ConnectionStatus from '../components/ConnectionStatus'
@@ -8,10 +8,12 @@ import Overview from './Overview'
 import Apis from './Apis'
 import Invoices from './Invoices'
 import Social from './Social'
+import Leads from './Leads'
+import Outreach from './Outreach'
 import Assistant from '../components/Assistant'
 import './Dashboard.css'
 
-type SectionId = 'dashboard' | 'apis' | 'invoices' | 'social'
+type SectionId = 'dashboard' | 'apis' | 'invoices' | 'social' | 'leads' | 'outreach'
 
 interface NavItem {
   id: SectionId
@@ -24,6 +26,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'apis', label: 'APIs', icon: Plug },
   { id: 'invoices', label: 'Invoices', icon: FileText },
   { id: 'social', label: 'Social', icon: Megaphone },
+  { id: 'leads', label: 'Leads', icon: Users },
+  { id: 'outreach', label: 'Outreach', icon: Send },
 ]
 
 function displayName(user: User) {
@@ -179,7 +183,19 @@ export default function Dashboard({ session }: { session: Session }) {
         </header>
 
         <main className="dash-content">
-          {active === 'apis' ? <Apis user={user} /> : active === 'invoices' ? <Invoices /> : active === 'social' ? <Social /> : <Overview name={name} />}
+          {active === 'apis' ? (
+            <Apis user={user} />
+          ) : active === 'invoices' ? (
+            <Invoices />
+          ) : active === 'social' ? (
+            <Social />
+          ) : active === 'leads' ? (
+            <Leads />
+          ) : active === 'outreach' ? (
+            <Outreach />
+          ) : (
+            <Overview name={name} />
+          )}
         </main>
 
         <Assistant userName={name} onNavigate={(page) => go(page)} />
