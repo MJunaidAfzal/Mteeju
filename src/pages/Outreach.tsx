@@ -558,7 +558,7 @@ export default function Outreach() {
             </label>
             <label className="out-field">
               <span>Your name (shown as the sender)</span>
-              <input className="api-input" value={editing.campaign.fromName} onChange={(e) => patch({ fromName: e.target.value })} placeholder="Naqi from Teeju" />
+              <input className="api-input" value={editing.campaign.fromName} onChange={(e) => patch({ fromName: e.target.value })} placeholder="e.g. Sara from Teeju" />
             </label>
             <label className="out-field">
               <span>Emails per day</span>
@@ -604,7 +604,7 @@ export default function Outreach() {
               rows={2}
               value={editing.campaign.signature}
               onChange={(e) => patch({ signature: e.target.value })}
-              placeholder={'Naqi Raza\nTeeju · +971 ...'}
+              placeholder={'Your name\nTeeju · +971 ...'}
             />
           </label>
 
