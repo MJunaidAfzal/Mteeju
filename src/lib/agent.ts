@@ -4,6 +4,8 @@ import { fetchServices } from './apiStore'
 import { sendRequest } from './rapidapi'
 import { isLeadFinderEndpoint, loadCities, countryName, runLeadSearch, COUNTRIES, type LeadSettings, type Presence } from './leads'
 import { findRecords, flatten } from './tableize'
+import { fetchLeads } from './leadStore'
+import { countsFor, fetchCampaigns, fetchDue } from './outreach'
 import {
   ACCENTS,
   TEMPLATES,
@@ -51,11 +53,20 @@ export const SYSTEM_PROMPT = `You are the Teeju assistant, built into the Teeju 
 
 The portal has these pages:
 - Dashboard: a greeting and the Supabase connection status.
-- APIs: saved RapidAPI services. Requests go through a secure Supabase proxy. The Google Map Scraper endpoint has a Lead Finder that searches a country/city for a niche and collects business leads (name, phone, website, rating...).
+- APIs: saved RapidAPI services. Requests go through a secure Supabase proxy, so the RapidAPI key never reaches the browser. Each service holds endpoints the owner can call, and the response can be read as a table, as JSON or saved as CSV. The Google Map Scraper endpoint has a Lead Finder: pick a country, a city and a niche, set how many leads and optional filters (minimum rating, minimum reviews, has/has no phone, has/has no website), and it runs several Google Maps searches around the city — a grid of points out to 25km and then the towns within 45km — up to 40 requests, collecting unique businesses. Results can be saved straight to the Leads page.
 - Invoices: create, save, edit and download invoices. Nine templates (classic, modern, minimal, luxe, bold, compact, noir, royal, onyx — the last four are black & gold) and colour options. Invoices are saved in the user's own Supabase database and can be downloaded as PDF, PNG or HTML.
 - Social: write a post, preview it per network, schedule it on a calendar and track accounts and insights.
-- Leads: import a CSV of businesses, save them in the database, then enrich them to find emails, extra phone numbers and social profiles.
-- Outreach: campaigns that work through those leads over several days. Every message is a WhatsApp message and waits in a list to be sent with one click from the owner's own WhatsApp. A lead that replies is dropped from the campaign.
+- Leads: the saved list of businesses. Import a CSV (or save a Lead Finder run), then "enrich" them — that visits each website to find emails, extra phone numbers and social profiles, and costs one RapidAPI credit per business. Rows can be filtered by status, source and contact details, searched, exported as CSV, deleted, and each lead has a status: new, enriched, no_contacts, contacted, replied, won, lost, unsubscribed. The table is paged, 25 rows a page by default.
+- Outreach: campaigns that work through those leads over several days. Every message is a WhatsApp message — there is no email anywhere in the portal.
+
+How Outreach works, in detail:
+- A campaign picks a set of leads (all of them, or one source/file), and has steps: "on day 1 send this", "on day 3 send this". New campaigns start with a five-step sequence over ten days (days 1, 3, 5, 7, 10) offering a free demo website.
+- A message can contain {{name}}, {{category}}, {{city}}, {{rating}}, {{reviews}} and {{website}}; each is filled in with that lead's own details. The campaign's sign-off is added to the end of every message.
+- Each campaign has a daily cap, a sending window (from hour / to hour) and a time zone. Only leads with a phone number can be reached.
+- Normally nothing sends itself: due messages appear in the portal, the "Next up" card shows the one on deck, and one click (or the Enter key; S skips) opens WhatsApp with the message already typed. The owner presses send inside WhatsApp, and the portal ticks it off. This needs them to be logged in at web.whatsapp.com.
+- A campaign can instead be switched to automatic, which delivers it through Meta's official WhatsApp Cloud API with an approved template — that needs the WHATSAPP_TOKEN and WHATSAPP_PHONE_ID secrets in Supabase and the whatsapp-send Edge Function. Automatic campaigns never appear in the click list.
+- Leads marked replied, won, lost or unsubscribed are dropped from every campaign. A campaign with nothing left to send finishes on its own.
+- Safe pace: 30-50 new WhatsApp chats a day, more than that risks the number being banned.
 
 How to behave:
 - Use the tools to actually do the work. Never say a task is done unless a tool returned success.
@@ -173,6 +184,25 @@ export const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: 'list_leads',
+    description:
+      'The saved leads: how many there are, how they break down by status and by source, and a few examples. Use it for questions like "how many leads do I have" or "how many have a phone number".',
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['new', 'enriched', 'no_contacts', 'contacted', 'replied', 'won', 'lost', 'unsubscribed'] },
+        source: { type: 'string', description: 'The file or search a lead came from' },
+        search: { type: 'string', description: 'Text to match against name, category, city, email or phone' },
+        limit: { type: 'number', description: 'How many examples to return (default 10)' },
+      },
+    },
+  },
+  {
+    name: 'list_campaigns',
+    description:
+      'The outreach campaigns with their status, pacing and progress: how many messages are sent, waiting, and ready to send on WhatsApp right now. Use it for "what is running" or "how many messages are waiting".',
+  },
+  {
     name: 'list_apis',
     description: 'List the RapidAPI services and endpoints saved in the portal.',
   },
@@ -248,7 +278,13 @@ export async function prepareTool(name: string, args: Record<string, unknown> | 
   switch (name) {
     case 'portal_overview':
       return simple(async () => {
-        const [invoices, services] = await Promise.all([fetchInvoices().catch(() => [] as Invoice[]), fetchServices().catch(() => [])])
+        const [invoices, services, leads, campaigns] = await Promise.all([
+          fetchInvoices().catch(() => [] as Invoice[]),
+          fetchServices().catch(() => []),
+          fetchLeads().catch(() => []),
+          fetchCampaigns().catch(() => []),
+        ])
+        const due = await fetchDue(campaigns).catch(() => [])
         let paid = 0
         let outstanding = 0
         for (const inv of invoices) {
@@ -266,6 +302,11 @@ export async function prepareTool(name: string, args: Record<string, unknown> | 
           awaiting_payment: formatMoney(outstanding, currency),
           saved_apis: services.map((s) => s.name),
           recent_invoices: invoices.slice(0, 5).map(short),
+          leads: leads.length,
+          leads_not_enriched: leads.filter((l) => !l.enrichedAt).length,
+          leads_replied: leads.filter((l) => l.status === 'replied').length,
+          campaigns_running: campaigns.filter((c) => c.status === 'running').length,
+          whatsapp_ready_to_send: due.length,
         }
       })
 
@@ -451,6 +492,66 @@ export async function prepareTool(name: string, args: Record<string, unknown> | 
         },
       }
     }
+
+    case 'list_leads':
+      return simple(async () => {
+        const all = await fetchLeads()
+        const search = String(arg(args, 'search', '')).toLowerCase()
+        const status = args?.status as string | undefined
+        const source = args?.source ? String(args.source).toLowerCase() : ''
+        const matching = all.filter((lead) => {
+          if (status && lead.status !== status) return false
+          if (source && !lead.source.toLowerCase().includes(source)) return false
+          if (!search) return true
+          return `${lead.name} ${lead.category} ${lead.city} ${lead.emails.join(' ')} ${lead.phone}`.toLowerCase().includes(search)
+        })
+        const tally = (pick: (l: (typeof all)[number]) => string) => {
+          const counts: Record<string, number> = {}
+          for (const lead of matching) {
+            const key = pick(lead) || '—'
+            counts[key] = (counts[key] ?? 0) + 1
+          }
+          return counts
+        }
+        return {
+          total_saved: all.length,
+          matching: matching.length,
+          by_status: tally((l) => l.status),
+          by_source: tally((l) => l.source),
+          with_phone: matching.filter((l) => l.phones.length > 0 || l.phone).length,
+          with_email: matching.filter((l) => l.emails.length > 0).length,
+          not_enriched_yet: matching.filter((l) => !l.enrichedAt).length,
+          examples: matching.slice(0, Number(arg(args, 'limit', 10))).map((l) => ({
+            name: l.name,
+            category: l.category,
+            city: l.city,
+            phone: l.phones[0] ?? l.phone,
+            website: l.website,
+            status: l.status,
+            source: l.source,
+          })),
+        }
+      })
+
+    case 'list_campaigns':
+      return simple(async () => {
+        const campaigns = await fetchCampaigns()
+        const [counts, due] = await Promise.all([countsFor(campaigns.map((c) => c.id)), fetchDue(campaigns)])
+        return {
+          ready_to_send_now: due.length,
+          campaigns: campaigns.map((c) => ({
+            name: c.name,
+            status: c.status,
+            sends: c.autoSend ? 'automatically through the WhatsApp Cloud API' : 'by hand, one click each',
+            leads: c.source || 'every lead',
+            per_day: c.dailyCap,
+            hours: `${c.sendFrom}:00-${c.sendTo}:00 ${c.timezone}`,
+            sent: counts[c.id]?.sent ?? 0,
+            waiting: counts[c.id]?.pending ?? 0,
+            skipped: counts[c.id]?.skipped ?? 0,
+          })),
+        }
+      })
 
     case 'list_apis':
       return simple(async () => {

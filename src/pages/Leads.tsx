@@ -128,7 +128,7 @@ export default function Leads() {
   const [contactFilter, setContactFilter] = useState<'all' | 'email' | 'social' | 'none'>('all')
   const [openLead, setOpenLead] = useState<Lead | null>(null)
   const [pageNo, setPageNo] = useState(1)
-  const [perPage, setPerPage] = useState(50)
+  const [perPage, setPerPage] = useState(25)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {

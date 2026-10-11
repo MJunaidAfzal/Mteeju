@@ -25,15 +25,17 @@ const TOOL_LABELS: Record<string, string> = {
   download_invoice: 'Preparing the download',
   find_leads: 'Searching for leads',
   list_apis: 'Checking saved APIs',
+  list_leads: 'Reading your leads',
+  list_campaigns: 'Checking your campaigns',
   call_api_endpoint: 'Calling the API',
   open_page: 'Opening the page',
 }
 
 const SUGGESTIONS = [
+  'How many leads do I have, and how many are still to enrich?',
+  'What is waiting to go out on WhatsApp right now?',
+  'Find 20 dentists in Karachi with a phone number and no website',
   'Make an invoice for Northwind: logo design 1800, website 10 × 320, 5% tax',
-  'How many invoices are unpaid?',
-  'Find 20 dentists in Karachi with a phone number',
-  'Download INV-0001 as PDF',
 ]
 
 type ChatItem =
@@ -250,7 +252,7 @@ export default function Assistant({ userName, onNavigate }: { userName: string; 
           {empty && (
             <div className="assist__welcome">
               <p className="assist__hi">Hello {userName.split(' ')[0]} 👋</p>
-              <p>I can make invoices, find leads, run your saved APIs and move around the portal. Try one of these:</p>
+              <p>I can find and enrich leads, run your WhatsApp campaigns, make invoices, call your saved APIs and move around the portal. Try one of these:</p>
               <div className="assist__chips">
                 {SUGGESTIONS.map((s) => (
                   <button key={s} type="button" onClick={() => setInput(s)}>
