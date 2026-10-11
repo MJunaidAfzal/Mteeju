@@ -74,15 +74,42 @@ export const newCampaign = (): Campaign => ({
   createdAt: new Date().toISOString(),
 })
 
-/** A sensible first sequence: an opener, then one follow-up a couple of days later. */
+/**
+ * The free-demo-website sequence, spread over ten days: an offer, two reminders
+ * that each add a reason, and a last message that walks away politely. No links
+ * in the first message — an unknown number sending a link reads as spam.
+ */
 export function defaultSteps(campaignId: string): Step[] {
   const make = (day: number, body: string): Step => ({ id: crypto.randomUUID(), campaignId, day, body })
   return [
     make(
       1,
-      'Hi {{name}} team — I work with {{category}} businesses in {{city}} and had a couple of quick ideas to bring you more customers. Would you like me to send them over?',
+      "Hi {{name}} team — I came across your Google profile in {{city}} and noticed you don't have a website yet.\n\n" +
+        "I build sites for {{category}} businesses, and I've already put together a free demo page for you so you can see how it would look. " +
+        'No charge, no commitment.\n\nWould you like me to send it over?',
     ),
-    make(3, 'Hi again — just checking you saw my last message. Happy to send the ideas across, no strings attached.'),
+    make(
+      3,
+      'Hi again — just checking you saw my message. The demo page for {{name}} is ready whenever you want a look.\n\n' +
+        "Takes you 30 seconds to see it, and it's yours free either way.",
+    ),
+    make(
+      5,
+      'One reason I mention it: people searching "{{category}} in {{city}}" mostly pick whoever looks easiest to trust. ' +
+        'A simple page with your photos, timings and a WhatsApp button usually does that job.\n\n' +
+        'Happy to send the demo so you can judge it yourself — just say yes.',
+    ),
+    make(
+      7,
+      "Hi {{name}} — last thought from me on this. Most of the places I've built for were in the same spot: plenty of walk-ins, good reviews, no website.\n\n" +
+        'If it helps, I can send the demo plus roughly what it would cost to put live. Want me to?',
+    ),
+    make(
+      10,
+      "No problem if the timing isn't right — I won't keep messaging.\n\n" +
+        'The demo page stays saved for a couple of weeks, so if you ever want to see it, just message me here and I\'ll send it across.\n\n' +
+        '{{name}} — all the best with the business.',
+    ),
   ]
 }
 
