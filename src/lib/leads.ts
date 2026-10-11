@@ -67,7 +67,9 @@ export const NICHE_SUGGESTIONS = [
 ]
 
 export const MAX_LEADS = 500
-const MAX_REQUESTS = 25
+const MAX_REQUESTS = 40
+/** Nearby towns worth searching once the chosen city is picked clean (km). */
+const NEARBY_RADIUS_KM = 45
 
 /** The Google Map Scraper "Search Places" endpoint (query + optional lat/long). */
 export function isLeadFinderEndpoint(service: ApiService, endpoint: ApiEndpoint) {
@@ -121,7 +123,7 @@ interface SearchTarget {
 function pointsAround(lat: number, lng: number, max: number) {
   const points = [{ lat, lng }]
   const dirs = [0, 90, 180, 270, 45, 135, 225, 315]
-  for (const km of [4, 9, 15]) {
+  for (const km of [3, 7, 12, 18, 25]) {
     for (const deg of dirs) {
       const rad = (deg * Math.PI) / 180
       const dLat = (km * Math.cos(rad)) / 111
@@ -137,7 +139,14 @@ export const hasFilters = (s: LeadSettings) => s.minRating > 0 || s.minReviews >
 /** How many searches to plan: ~20 places per search, some repeats, more when filters drop places. */
 export function requestBudget(settings: LeadSettings) {
   const base = Math.ceil(settings.count / 8) + 1
-  return Math.min(MAX_REQUESTS, Math.max(2, hasFilters(settings) ? Math.ceil(base * 1.75) : base))
+  return Math.min(MAX_REQUESTS, Math.max(2, hasFilters(settings) ? Math.ceil(base * 2.5) : base))
+}
+
+/** Straight-line distance in kilometres. */
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const dLat = (bLat - aLat) * 111
+  const dLng = (bLng - aLng) * 111 * Math.cos((aLat * Math.PI) / 180)
+  return Math.sqrt(dLat * dLat + dLng * dLng)
 }
 
 async function planTargets(settings: LeadSettings): Promise<SearchTarget[]> {
@@ -149,7 +158,20 @@ async function planTargets(settings: LeadSettings): Promise<SearchTarget[]> {
     const query = buildQuery(niche, placeLabel(city, settings.country))
     // A typed-in place has no coordinates: one search is all we can do
     if (city.lat === undefined || city.lng === undefined) return [{ query, area: city.name }]
-    return pointsAround(city.lat, city.lng, budget).map((p) => ({ query, lat: p.lat, lng: p.lng, area: city.name }))
+
+    const grid: SearchTarget[] = pointsAround(city.lat, city.lng, budget).map((p) => ({ query, lat: p.lat, lng: p.lng, area: city.name }))
+    // Once the city itself is picked clean, carry on through the towns around it.
+    const near = (await loadCities(settings.country))
+      .filter(
+        (c) =>
+          c.name !== city.name &&
+          c.lat !== undefined &&
+          c.lng !== undefined &&
+          distanceKm(city.lat!, city.lng!, c.lat, c.lng) <= NEARBY_RADIUS_KM,
+      )
+      .slice(0, Math.max(0, budget - grid.length) + 8)
+      .map((c) => ({ query: buildQuery(niche, `${c.name}, ${country}`), lat: c.lat, lng: c.lng, area: c.name }))
+    return [...grid, ...near]
   }
 
   // Whole country: spread the searches over its largest cities
@@ -274,9 +296,18 @@ export async function runLeadSearch(
     })
   }
 
+  let area = ''
   for (const target of targets) {
     if (signal.cancelled || matching().length >= settings.count) break
-    onProgress({ done: requestsUsed, total: targets.length, found: matching().length, area: target.area })
+    if (requestsUsed >= MAX_REQUESTS) break
+    // Each area gets its own patience: a picked-clean city should not stop the towns after it.
+    if (target.area !== area) {
+      area = target.area
+      emptyStreak = 0
+    } else if (emptyStreak >= 4) {
+      continue
+    }
+    onProgress({ done: requestsUsed, total: Math.min(targets.length, MAX_REQUESTS), found: matching().length, area: target.area })
 
     const query: KeyValue[] = [...baseQuery, { id: 'q', key: 'query', value: target.query }]
     if (target.lat !== undefined && target.lng !== undefined) {
@@ -310,9 +341,9 @@ export async function runLeadSearch(
       all.set(key, gridMode ? record : { ...record, search_area: target.area })
       added += 1
     }
-    // Two searches in a row with nothing new: this area has no more places for the query
+    // Several searches in a row with nothing new: this area has no more places for the query
     emptyStreak = added === 0 ? emptyStreak + 1 : 0
-    if (gridMode && emptyStreak >= 2) {
+    if (gridMode && emptyStreak >= 4 && target === targets[targets.length - 1]) {
       exhausted = true
       break
     }
