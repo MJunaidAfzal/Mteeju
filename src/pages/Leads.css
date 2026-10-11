@@ -333,3 +333,55 @@
     width: 100vw;
   }
 }
+
+/* ---------- Pages ---------- */
+.lead-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-700);
+}
+
+.lead-pager__count {
+  margin: 0;
+  color: var(--ink-400);
+}
+
+.lead-pager__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lead-pager__page {
+  min-width: 110px;
+  text-align: center;
+}
+
+.lead-pager__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-400);
+}
+
+.lead-pager__size select {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  font: inherit;
+  color: var(--ink-700);
+}
+
+@media (max-width: 640px) {
+  .lead-pager {
+    justify-content: center;
+  }
+}

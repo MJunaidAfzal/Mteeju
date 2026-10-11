@@ -3,6 +3,8 @@ import {
   AlertCircle,
   AtSign,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Database,
   Download,
@@ -125,6 +127,8 @@ export default function Leads() {
   const [sourceFilter, setSourceFilter] = useState('all')
   const [contactFilter, setContactFilter] = useState<'all' | 'email' | 'social' | 'none'>('all')
   const [openLead, setOpenLead] = useState<Lead | null>(null)
+  const [pageNo, setPageNo] = useState(1)
+  const [perPage, setPerPage] = useState(50)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -158,6 +162,11 @@ export default function Leads() {
       return true
     })
   }, [leads, search, statusFilter, sourceFilter, contactFilter])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage))
+  // A filter or a delete can leave you past the last page.
+  const page = Math.min(pageNo, pageCount)
+  const shown = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage])
 
   const stats = useMemo(
     () => ({
@@ -279,7 +288,7 @@ export default function Leads() {
     }
   }
 
-  const allShownSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id))
+  const allShownSelected = shown.length > 0 && shown.every((l) => selected.has(l.id))
 
   if (setupRequired) {
     return (
@@ -411,12 +420,12 @@ export default function Leads() {
             <div className="inv-list__tools">
               <div className="api-toggle">
                 {(['all', 'email', 'social', 'none'] as const).map((f) => (
-                  <button key={f} type="button" className={contactFilter === f ? 'is-active' : ''} onClick={() => setContactFilter(f)}>
+                  <button key={f} type="button" className={contactFilter === f ? 'is-active' : ''} onClick={() => { setContactFilter(f); setPageNo(1) }}>
                     {f === 'all' ? 'All' : f === 'email' ? 'Has email' : f === 'social' ? 'Has socials' : 'No contacts'}
                   </button>
                 ))}
               </div>
-              <select className="api-input soc-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as LeadStatus | 'all')}>
+              <select className="api-input soc-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as LeadStatus | 'all'); setPageNo(1) }}>
                 <option value="all">Any status</option>
                 {LEAD_STATUSES.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -425,7 +434,7 @@ export default function Leads() {
                 ))}
               </select>
               {sources.length > 1 && (
-                <select className="api-input soc-select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                <select className="api-input soc-select" value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPageNo(1) }}>
                   <option value="all">Every file</option>
                   {sources.map((s) => (
                     <option key={s} value={s}>
@@ -437,7 +446,7 @@ export default function Leads() {
               <label className="api-table-search">
                 <Search size={15} />
                 <span className="sr-only">Search leads</span>
-                <input type="search" placeholder="Search name, city, email…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input type="search" placeholder="Search name, city, email…" value={search} onChange={(e) => { setSearch(e.target.value); setPageNo(1) }} />
               </label>
             </div>
           </header>
@@ -447,7 +456,7 @@ export default function Leads() {
               <input
                 type="checkbox"
                 checked={allShownSelected}
-                onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((l) => l.id)) : new Set())}
+                onChange={(e) => setSelected(e.target.checked ? new Set(shown.map((l) => l.id)) : new Set())}
               />
               Select all shown
             </label>
@@ -489,7 +498,7 @@ export default function Leads() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 500).map((lead) => (
+                  {shown.map((lead) => (
                     <tr key={lead.id} className={selected.has(lead.id) ? 'is-picked' : ''}>
                       <td className="lead-table__pick">
                         <input
@@ -570,8 +579,36 @@ export default function Leads() {
                   ))}
                 </tbody>
               </table>
-              {filtered.length > 500 && <p className="api-hint lead-more">Showing the first 500 — use the filters or export the CSV for the rest.</p>}
             </div>
+          )}
+
+          {filtered.length > 0 && (
+            <nav className="lead-pager" aria-label="Pages of leads">
+              <p className="lead-pager__count">
+                {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} of {filtered.length}
+              </p>
+              <div className="lead-pager__controls">
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => setPageNo(page - 1)} disabled={page <= 1}>
+                  <ChevronLeft size={14} /> Previous
+                </button>
+                <span className="lead-pager__page">
+                  Page {page} of {pageCount}
+                </span>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => setPageNo(page + 1)} disabled={page >= pageCount}>
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+              <label className="lead-pager__size">
+                Per page
+                <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPageNo(1) }}>
+                  {[25, 50, 100, 200].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </nav>
           )}
         </section>
       )}
