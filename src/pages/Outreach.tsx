@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Send,
+  ShieldCheck,
   SkipForward,
   Square,
   Trash2,
@@ -37,7 +38,9 @@ import {
   newCampaign,
   queueLeads,
   reachable,
+  runAuto,
   saveCampaign,
+  sendApiTest,
   setCampaignStatus,
   type Campaign,
   type CampaignCounts,
@@ -56,7 +59,9 @@ const STATUS_LABEL: Record<Campaign['status'], string> = {
   done: 'Finished',
 }
 
-const hour = (h: number) => `${String(h % 12 === 0 ? 12 : h % 12)}${h < 12 ? 'am' : 'pm'}`
+const hour = (h: number) => `${String(h % 12 === 0 ? 12 : h % 12)}${h % 24 < 12 ? 'am' : 'pm'}`
+/** The end of the window: hour 24 is midnight, not midday. */
+const endHour = (h: number) => (h === 24 ? 'midnight' : hour(h))
 
 function SetupCard({ onRetry, checking }: { onRetry: () => void; checking: boolean }) {
   const [copied, setCopied] = useState(false)
@@ -119,6 +124,14 @@ export default function Outreach() {
   const [editing, setEditing] = useState<{ campaign: Campaign; steps: Step[] } | null>(null)
   const [openId, setOpenId] = useState('')
   const [queue, setQueue] = useState<QueueItem[]>([])
+  const [testTo, setTestTo] = useState(() => {
+    try {
+      return localStorage.getItem('teeju-test-number') ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const [testResult, setTestResult] = useState('')
   const editorRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
@@ -163,11 +176,34 @@ export default function Outreach() {
     return reachable(pool)
   }, [editing, leads])
 
+  /** Campaigns that deliver themselves through the Cloud API. */
+  const automatic = useMemo(() => campaigns.filter((c) => c.status === 'running' && c.autoSend), [campaigns])
+
   /** Running campaigns that have messages waiting but are outside their hours. */
   const resting = useMemo(
-    () => campaigns.filter((c) => c.status === 'running' && !inSendingWindow(c) && (counts[c.id]?.pending ?? 0) > 0),
+    () => campaigns.filter((c) => c.status === 'running' && !c.autoSend && !inSendingWindow(c) && (counts[c.id]?.pending ?? 0) > 0),
     [campaigns, counts],
   )
+
+  // Enter sends the one on deck, S skips it, so a long queue is just a row of keystrokes.
+  useEffect(() => {
+    const next = due[0]
+    if (!next || editing) return
+    function onKey(event: KeyboardEvent) {
+      const tag = (event.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        sendAndNext(next)
+      } else if (event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        void markSent(next, 'skipped')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [due, editing])
 
   /* ---------- Editing ---------- */
 
@@ -314,6 +350,45 @@ export default function Outreach() {
     }
   }
 
+  /* ---------- Automatic sending ---------- */
+
+  async function sendAuto() {
+    setBusy('auto')
+    setNote(null)
+    try {
+      const result = await runAuto()
+      await load()
+      const extra = result.waiting > 0 ? ` ${result.waiting} campaign${result.waiting === 1 ? '' : 's'} are outside their hours or at today's limit.` : ''
+      setNote({
+        kind: result.failed > 0 ? 'error' : 'ok',
+        text: `${result.sent} message${result.sent === 1 ? '' : 's'} sent, ${result.failed} failed.${extra}${result.notes?.length ? ` ${result.notes[0]}` : ''}`,
+      })
+    } catch (err) {
+      setNote({ kind: 'error', text: err instanceof Error ? err.message : 'The run failed.' })
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function testApi() {
+    if (!editing || !testTo.trim()) return
+    setBusy('test')
+    setTestResult('')
+    try {
+      await sendApiTest(testTo.trim(), editing.campaign.templateName.trim(), editing.campaign.templateLang.trim() || 'en_US')
+      try {
+        localStorage.setItem('teeju-test-number', testTo.trim())
+      } catch {
+        // private browsing can block storage
+      }
+      setTestResult(`Sent. Check WhatsApp on ${testTo.trim()}.`)
+    } catch (err) {
+      setTestResult(err instanceof Error ? err.message : 'The test message failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   /* ---------- WhatsApp one-click ---------- */
 
   const textFor = (item: QueueItem) => compose(item.body, leadById.get(item.leadId), campaignById.get(item.campaignId)?.signature ?? '')
@@ -321,6 +396,12 @@ export default function Outreach() {
   function openWhatsapp(item: QueueItem) {
     window.open(`https://wa.me/${item.recipient}?text=${encodeURIComponent(textFor(item))}`, '_blank', 'noopener')
     setOpened((set) => new Set(set).add(item.id))
+  }
+
+  /** One keystroke per lead: open the chat and tick it off in the same move. */
+  function sendAndNext(item: QueueItem) {
+    openWhatsapp(item)
+    void markSent(item, 'sent')
   }
 
   async function markSent(item: QueueItem, status: 'sent' | 'skipped') {
@@ -376,6 +457,11 @@ export default function Outreach() {
           <p className="page-head__sub">Every message waits here for one click, and goes out from your own WhatsApp.</p>
         </div>
         <div className="inv-actions">
+          {automatic.length > 0 && (
+            <button type="button" className="btn btn--secondary" onClick={() => void sendAuto()} disabled={busy === 'auto'}>
+              {busy === 'auto' ? <Loader2 size={16} className="spin" /> : <Send size={16} />} Send automatic now
+            </button>
+          )}
           <button type="button" className="btn btn--secondary" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />} Refresh
           </button>
@@ -413,6 +499,31 @@ export default function Outreach() {
           </article>
         ))}
       </section>
+
+      {due[0] && (
+        <section className="card out-rapid">
+          <header className="card__head">
+            <div>
+              <h2 className="card__title">Next up — {leadById.get(due[0].leadId)?.name || 'Lead'}</h2>
+              <p className="card__sub">
+                +{due[0].recipient} · {due.length} left today. Press <kbd>Enter</kbd> to send, <kbd>S</kbd> to skip.
+              </p>
+            </div>
+          </header>
+          <p className="out-rapid__text">{textFor(due[0])}</p>
+          <div className="out-rapid__actions">
+            <button type="button" className="btn btn--primary" onClick={() => sendAndNext(due[0])}>
+              <Send size={16} /> Send and next
+            </button>
+            <button type="button" className="btn btn--secondary" onClick={() => void markSent(due[0], 'skipped')}>
+              <SkipForward size={16} /> Skip
+            </button>
+          </div>
+          <p className="api-hint">
+            The chat opens with the message already typed — press send in WhatsApp, and this one is already ticked off here.
+          </p>
+        </section>
+      )}
 
       {due.length > 0 && (
         <section className="card out-wa">
@@ -524,7 +635,7 @@ export default function Outreach() {
                 <select className="api-input" value={editing.campaign.sendTo} onChange={(e) => patch({ sendTo: Number(e.target.value) })}>
                   {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
                     <option key={h} value={h}>
-                      {hour(h)}
+                      {endHour(h)}
                     </option>
                   ))}
                 </select>
@@ -535,6 +646,67 @@ export default function Outreach() {
               <input className="api-input" value={editing.campaign.timezone} onChange={(e) => patch({ timezone: e.target.value })} />
             </label>
           </div>
+
+          <section className="out-auto">
+            <label className="out-auto__toggle">
+              <input type="checkbox" checked={editing.campaign.autoSend} onChange={(e) => patch({ autoSend: e.target.checked })} />
+              <span>
+                <strong>Send this campaign automatically</strong>
+                <em>Through the official WhatsApp Cloud API — no clicking. Needs an approved template and the Meta secrets in Supabase.</em>
+              </span>
+            </label>
+
+            {editing.campaign.autoSend && (
+              <>
+                <div className="out-grid">
+                  <label className="out-field">
+                    <span>Template name</span>
+                    <input
+                      className="api-input"
+                      value={editing.campaign.templateName}
+                      onChange={(e) => patch({ templateName: e.target.value })}
+                      placeholder="intro_offer"
+                    />
+                  </label>
+                  <label className="out-field">
+                    <span>Template language</span>
+                    <input className="api-input" value={editing.campaign.templateLang} onChange={(e) => patch({ templateLang: e.target.value })} placeholder="en_US" />
+                  </label>
+                  <label className="out-field">
+                    <span>Fills {'{{1}}'}, {'{{2}}'} …</span>
+                    <input
+                      className="api-input"
+                      value={editing.campaign.templateParams}
+                      onChange={(e) => patch({ templateParams: e.target.value })}
+                      placeholder="{{name}}, {{city}}"
+                    />
+                  </label>
+                </div>
+                <div className="out-auto__test">
+                  <input
+                    className="api-input"
+                    value={testTo}
+                    onChange={(e) => setTestTo(e.target.value)}
+                    placeholder="your own number, e.g. 923001234567"
+                    aria-label="Number for the test message"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    onClick={() => void testApi()}
+                    disabled={busy === 'test' || !testTo.trim() || !editing.campaign.templateName.trim()}
+                  >
+                    {busy === 'test' ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />} Send test
+                  </button>
+                </div>
+                {testResult && <p className={`out-auto__result${/sent/i.test(testResult) ? ' is-ok' : ''}`}>{testResult}</p>}
+                <p className="api-hint">
+                  The message below is still what a manual send would say — an automatic send uses the approved template instead. Setup steps are in{' '}
+                  <code>whatsapp-api.txt</code>.
+                </p>
+              </>
+            )}
+          </section>
 
           <label className="out-field out-field--wide">
             <span>Sign-off added to every message</span>
@@ -635,7 +807,7 @@ export default function Outreach() {
                   <div>
                     <h2 className="card__title">{campaign.name || 'Untitled campaign'}</h2>
                     <p className="card__sub">
-                      {campaign.source || 'Every lead'} · {campaign.dailyCap}/day · {hour(campaign.sendFrom)}–{hour(campaign.sendTo)} {campaign.timezone}
+                      {campaign.source || 'Every lead'} · {campaign.dailyCap}/day · {hour(campaign.sendFrom)}–{endHour(campaign.sendTo)} {campaign.timezone}
                     </p>
                   </div>
                   <span className={`out-chip out-chip--${campaign.status}`}>{STATUS_LABEL[campaign.status]}</span>

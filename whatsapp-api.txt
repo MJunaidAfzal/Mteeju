@@ -1,0 +1,71 @@
+WhatsApp khud ba khud bhejna — Meta Cloud API (official)
+=========================================================
+
+Ye optional hai. Is ke baghair portal pehle ki tarah chalta rahega: har message
+ek click se aap khud bhejte hain. Ye setup karne ke baad campaign khud bhejta hai,
+500 ho ya 5000 — koi click nahi.
+
+Pehle teen baatein jaan lein
+- Ye Meta ka apna raasta hai, is liye number ban nahi hota.
+- Cold (pehli baar) message hamesha ek MANZOOR SHUDA TEMPLATE se jata hai.
+  Apni marzi ka free text sirf us surat me ja sakta hai jab banda pichhle 24 ghante
+  me aap ko khud message kar chuka ho.
+- Har message ka paisa lagta hai (Pakistan me taqreeban 1-3 rupay, marketing/utility
+  ke hisab se alag). Pehle 1000 conversations har mahine muft hoti hain.
+
+A. Meta par setup (ek dafa, 1-3 din manzoori ke)
+1. business.facebook.com → apna Business account banayen/kholen → verification complete karen.
+2. developers.facebook.com → My Apps → Create App → type: Business.
+3. App me WhatsApp product add karen → "API setup" page khulega.
+4. Wahan se do cheezen chahiye:
+   - Phone number ID  (number ka ID, khud number nahi)
+   - ek number jo WhatsApp Business se juda ho (apna purana zaati number na lagayen —
+     ek dafa API par chala jaye to normal WhatsApp app me wapas nahi aata)
+5. Permanent token: Business settings → Users → System users → naya system user (Admin)
+   → Add assets: apni app → Generate token → permissions: whatsapp_business_messaging
+   aur whatsapp_business_management → token copy karen (ye sirf ek dafa dikhta hai).
+6. Template: WhatsApp Manager → Message templates → Create template
+   - Category: Marketing
+   - Body ki misal:
+       Hello {{1}}, I work with businesses in {{2}} and had a couple of ideas to
+       bring you more customers. Would you like me to send them over?
+   - Sample values dena zaroori hai, warna reject ho jata hai.
+   - Manzoori aam tor par chand ghanton me aa jati hai.
+
+B. Supabase par setup (10 minute)
+1. SQL Editor → New query → 20261013000000_whatsapp_api.sql paste → Run
+2. Edge Functions → Deploy a new function → naam: whatsapp-send
+   → supabase/functions/whatsapp-send/index.ts ka poora code paste → Deploy
+3. Edge Functions → Secrets → do secrets:
+   WHATSAPP_TOKEN     = wo permanent token
+   WHATSAPP_PHONE_ID  = Phone number ID
+
+C. Portal me (1 minute)
+1. Outreach → campaign Edit karen
+2. "Send this campaign automatically" par tick lagayen
+3. Template name (jaise intro_offer), language (jaise en_US)
+4. "Fills {{1}}, {{2}} …" me likhen ke template ke khane kis cheez se bharne hain,
+   comma se alag. Misal: {{name}}, {{city}}
+   (yahan {{name}} {{category}} {{city}} {{rating}} {{reviews}} {{website}} chalte hain)
+5. Apna number daal kar "Send test" dabayen — WhatsApp par message aa jana chahiye.
+6. Save and start.
+
+Ab ye campaign click wali list me nahi aayega. Upar "Send automatic now" se jab
+chahen chala lein, ya neeche cron laga dein.
+
+D. Har ghante khud chalne ke liye (optional)
+Supabase → Integrations → Cron → new job → schedule: 0 * * * *
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/whatsapp-send',
+    headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>', 'Content-Type', 'application/json'),
+    body := '{}'::jsonb
+  );
+Cron campaign ke ghanton aur roz ki had ka poora lihaz karta hai.
+
+Agar error aaye
+- "Template name does not exist"  → naam ya language code template se nahi mil raha
+- "number of parameters does not match" → "Fills {{1}}, {{2}}" me khanon ki tadaad
+  template ke khanon ke barabar nahi
+- "(#131030) recipient not in allowed list" → app abhi test mode me hai; number ko
+  API setup page par "To" list me add karen, ya app ko live karen
+- Error har message ke sath Messages table me mehfooz hota hai — wahan se parh lein.

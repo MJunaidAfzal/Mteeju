@@ -16,6 +16,10 @@ export interface Campaign {
   status: CampaignStatus
   source: string
   signature: string
+  autoSend: boolean
+  templateName: string
+  templateLang: string
+  templateParams: string
   dailyCap: number
   sendFrom: number
   sendTo: number
@@ -57,6 +61,10 @@ export const newCampaign = (): Campaign => ({
   status: 'draft',
   source: '',
   signature: '',
+  autoSend: false,
+  templateName: '',
+  templateLang: 'en_US',
+  templateParams: '{{name}}',
   dailyCap: 25,
   sendFrom: 10,
   sendTo: 18,
@@ -93,6 +101,10 @@ interface CampaignRow {
   status: CampaignStatus
   source: string
   signature: string
+  auto_send: boolean
+  template_name: string
+  template_lang: string
+  template_params: string
   daily_cap: number
   send_from: number
   send_to: number
@@ -108,6 +120,10 @@ const fromCampaign = (row: CampaignRow): Campaign => ({
   status: row.status,
   source: row.source,
   signature: row.signature,
+  autoSend: row.auto_send ?? false,
+  templateName: row.template_name ?? '',
+  templateLang: row.template_lang ?? 'en_US',
+  templateParams: row.template_params ?? '{{name}}',
   dailyCap: row.daily_cap,
   sendFrom: row.send_from,
   sendTo: row.send_to,
@@ -123,6 +139,10 @@ const toCampaign = (campaign: Campaign) => ({
   status: campaign.status,
   source: campaign.source,
   signature: campaign.signature,
+  auto_send: campaign.autoSend,
+  template_name: campaign.templateName,
+  template_lang: campaign.templateLang,
+  template_params: campaign.templateParams,
   daily_cap: campaign.dailyCap,
   send_from: campaign.sendFrom,
   send_to: campaign.sendTo,
@@ -187,10 +207,21 @@ export async function fetchSteps(campaignId: string): Promise<Step[]> {
   return (data as StepRow[]).map(fromStep)
 }
 
+/** True when the Cloud API columns have not been added to the database yet. */
+const missingApiColumns = (error: { code?: string; message: string }) =>
+  error.code === 'PGRST204' || error.code === '42703' || /auto_send|template_name|template_lang|template_params/.test(error.message)
+
 /** Saves the campaign and replaces its steps with the ones given. */
 export async function saveCampaign(campaign: Campaign, steps: Step[]) {
   const { error } = await supabase.from('campaigns').upsert(toCampaign(campaign))
-  if (error) fail(error)
+  if (error) {
+    // The automatic-sending migration is optional: save the rest rather than refuse.
+    if (!missingApiColumns(error)) fail(error)
+    const row: Record<string, unknown> = { ...toCampaign(campaign) }
+    for (const column of ['auto_send', 'template_name', 'template_lang', 'template_params']) delete row[column]
+    const { error: retry } = await supabase.from('campaigns').upsert(row)
+    if (retry) fail(retry)
+  }
 
   const keep = steps.map((s) => s.id)
   const remove = supabase.from('campaign_steps').delete().eq('campaign_id', campaign.id)
@@ -334,7 +365,8 @@ async function sentToday(campaigns: Campaign[]): Promise<Record<string, number>>
  * sending hours, and never more than the daily cap each one allows.
  */
 export async function fetchDue(campaigns: Campaign[]): Promise<QueueItem[]> {
-  const open = campaigns.filter((c) => c.status === 'running' && inSendingWindow(c))
+  // Campaigns that send themselves through the Cloud API never queue up for a click.
+  const open = campaigns.filter((c) => c.status === 'running' && !c.autoSend && inSendingWindow(c))
   if (open.length === 0) return []
 
   const { data, error } = await supabase
@@ -403,6 +435,46 @@ export async function finishIfDone(campaignId: string): Promise<boolean> {
   if ((count ?? 0) > 0) return false
   await setCampaignStatus(campaignId, 'done')
   return true
+}
+
+/* ---------- Automatic sending (Meta WhatsApp Cloud API) ---------- */
+
+export interface RunResult {
+  sent: number
+  failed: number
+  cancelled: number
+  waiting: number
+  notes: string[]
+}
+
+/** Calls the Edge Function and turns whatever went wrong into a sentence worth reading. */
+async function callSender(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('whatsapp-send', { body })
+  if (error) {
+    let message = 'Could not reach the "whatsapp-send" function. Is it deployed in Supabase?'
+    const context = (error as { context?: Response }).context
+    if (context && typeof context.json === 'function') {
+      try {
+        const payload = await context.json()
+        if (payload?.error) message = String(payload.error)
+      } catch {
+        // keep the generic message
+      }
+    }
+    throw new Error(message)
+  }
+  if (data?.error) throw new Error(String(data.error))
+  return data
+}
+
+/** Sends everything the automatic campaigns owe right now. */
+export async function runAuto(campaignId?: string): Promise<RunResult> {
+  return (await callSender({ campaignId, force: true })) as RunResult
+}
+
+/** One template message to a number of your own, to prove the setup works. */
+export async function sendApiTest(to: string, templateName: string, templateLang: string) {
+  await callSender({ testTo: to, templateName, templateLang })
 }
 
 /** Fills {{name}} and friends so the portal shows what will actually be sent. */
