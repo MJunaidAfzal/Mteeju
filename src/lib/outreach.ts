@@ -1,10 +1,10 @@
-// Outreach campaigns: the sequence a lead walks through, and the queue of messages it owes.
+// Outreach campaigns: the sequence a lead walks through, and the queue of WhatsApp
+// messages it owes. Nothing is sent on its own — every message waits for one click.
 import { supabase } from './supabase'
 import { SetupRequiredError } from './apiStore'
 import type { Lead } from './leadStore'
 
 export type CampaignStatus = 'draft' | 'running' | 'paused' | 'done'
-export type Channel = 'email' | 'whatsapp'
 export type QueueStatus = 'pending' | 'sent' | 'failed' | 'skipped' | 'cancelled'
 
 /** Leads that answered or opted out are left alone. */
@@ -15,7 +15,6 @@ export interface Campaign {
   name: string
   status: CampaignStatus
   source: string
-  fromName: string
   signature: string
   dailyCap: number
   sendFrom: number
@@ -30,10 +29,7 @@ export interface Step {
   id: string
   campaignId: string
   day: number
-  channel: Channel
-  subject: string
   body: string
-  personalise: boolean
 }
 
 export interface QueueItem {
@@ -41,9 +37,7 @@ export interface QueueItem {
   campaignId: string
   stepId: string
   leadId: string
-  channel: Channel
   recipient: string
-  subject: string
   body: string
   scheduledFor: string
   status: QueueStatus
@@ -54,8 +48,7 @@ export interface QueueItem {
 export interface CampaignCounts {
   pending: number
   sent: number
-  failed: number
-  waitingWhatsapp: number
+  skipped: number
 }
 
 export const newCampaign = (): Campaign => ({
@@ -63,7 +56,6 @@ export const newCampaign = (): Campaign => ({
   name: '',
   status: 'draft',
   source: '',
-  fromName: '',
   signature: '',
   dailyCap: 25,
   sendFrom: 10,
@@ -74,36 +66,15 @@ export const newCampaign = (): Campaign => ({
   createdAt: new Date().toISOString(),
 })
 
-/** A sensible first sequence: email, then WhatsApp, then one follow-up of each. */
+/** A sensible first sequence: an opener, then one follow-up a couple of days later. */
 export function defaultSteps(campaignId: string): Step[] {
-  const make = (day: number, channel: Channel, subject: string, body: string): Step => ({
-    id: crypto.randomUUID(),
-    campaignId,
-    day,
-    channel,
-    subject,
-    body,
-    personalise: true,
-  })
+  const make = (day: number, body: string): Step => ({ id: crypto.randomUUID(), campaignId, day, body })
   return [
     make(
       1,
-      'email',
-      'Quick idea for {{name}}',
-      'Hi {{name}} team,\n\n{{opening}}\n\nI help {{category}} businesses in {{city}} get more customers online. I had a look at your listing and spotted two or three things that could bring in more bookings.\n\nWould it help if I sent them over?',
-    ),
-    make(
-      2,
-      'whatsapp',
-      '',
       'Hi {{name}} team — I work with {{category}} businesses in {{city}} and had a couple of quick ideas to bring you more customers. Would you like me to send them over?',
     ),
-    make(
-      4,
-      'email',
-      'Following up — {{name}}',
-      'Hi again,\n\nJust floating this back to the top of your inbox. Happy to send the ideas over with no strings attached — one reply is all it takes.\n\nIf now is not the right time, no problem at all.',
-    ),
+    make(3, 'Hi again — just checking you saw my last message. Happy to send the ideas across, no strings attached.'),
   ]
 }
 
@@ -121,7 +92,6 @@ interface CampaignRow {
   name: string
   status: CampaignStatus
   source: string
-  from_name: string
   signature: string
   daily_cap: number
   send_from: number
@@ -137,7 +107,6 @@ const fromCampaign = (row: CampaignRow): Campaign => ({
   name: row.name,
   status: row.status,
   source: row.source,
-  fromName: row.from_name,
   signature: row.signature,
   dailyCap: row.daily_cap,
   sendFrom: row.send_from,
@@ -153,7 +122,6 @@ const toCampaign = (campaign: Campaign) => ({
   name: campaign.name,
   status: campaign.status,
   source: campaign.source,
-  from_name: campaign.fromName,
   signature: campaign.signature,
   daily_cap: campaign.dailyCap,
   send_from: campaign.sendFrom,
@@ -165,20 +133,14 @@ interface StepRow {
   id: string
   campaign_id: string
   day: number
-  channel: Channel
-  subject: string
   body: string
-  personalise: boolean
 }
 
 const fromStep = (row: StepRow): Step => ({
   id: row.id,
   campaignId: row.campaign_id,
   day: row.day,
-  channel: row.channel,
-  subject: row.subject,
   body: row.body,
-  personalise: row.personalise,
 })
 
 interface QueueRow {
@@ -186,9 +148,7 @@ interface QueueRow {
   campaign_id: string
   step_id: string
   lead_id: string
-  channel: Channel
   recipient: string
-  subject: string
   body: string
   scheduled_for: string
   status: QueueStatus
@@ -201,15 +161,15 @@ const fromQueue = (row: QueueRow): QueueItem => ({
   campaignId: row.campaign_id,
   stepId: row.step_id,
   leadId: row.lead_id,
-  channel: row.channel,
   recipient: row.recipient,
-  subject: row.subject,
   body: row.body,
   scheduledFor: row.scheduled_for,
   status: row.status,
   sentAt: row.sent_at,
   error: row.error,
 })
+
+const QUEUE_COLUMNS = 'id, campaign_id, step_id, lead_id, recipient, body, scheduled_for, status, sent_at, error'
 
 export async function fetchCampaigns(): Promise<Campaign[]> {
   const { data, error } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false })
@@ -218,7 +178,11 @@ export async function fetchCampaigns(): Promise<Campaign[]> {
 }
 
 export async function fetchSteps(campaignId: string): Promise<Step[]> {
-  const { data, error } = await supabase.from('campaign_steps').select('*').eq('campaign_id', campaignId).order('day', { ascending: true })
+  const { data, error } = await supabase
+    .from('campaign_steps')
+    .select('id, campaign_id, day, body')
+    .eq('campaign_id', campaignId)
+    .order('day', { ascending: true })
   if (error) fail(error)
   return (data as StepRow[]).map(fromStep)
 }
@@ -238,10 +202,8 @@ export async function saveCampaign(campaign: Campaign, steps: Step[]) {
       id: step.id,
       campaign_id: campaign.id,
       day: step.day,
-      channel: step.channel,
-      subject: step.subject,
+      channel: 'whatsapp',
       body: step.body,
-      personalise: step.personalise,
     })),
   )
   if (stepError) fail(stepError)
@@ -263,28 +225,42 @@ export async function setCampaignStatus(id: string, status: CampaignStatus) {
 /** Digits only, the way wa.me wants a number. */
 export const waNumber = (phone: string) => phone.replace(/\D/g, '')
 
-export const contactFor = (lead: Lead, channel: Channel) =>
-  channel === 'email' ? (lead.emails[0] ?? '') : waNumber(lead.phones[0] ?? lead.phone ?? '')
+/** The WhatsApp number this lead can be reached on, if it has one. */
+export const contactFor = (lead: Lead) => waNumber(lead.phones[0] ?? lead.phone ?? '')
 
-/** Which of these leads this campaign can actually reach. */
-export function reachable(leads: Lead[], steps: Step[]) {
-  const channels = new Set(steps.map((s) => s.channel))
-  return leads.filter((lead) => !STOPPED_STATUSES.includes(lead.status) && [...channels].some((c) => contactFor(lead, c)))
+/** Which of these leads a campaign can actually reach. */
+export function reachable(leads: Lead[]) {
+  return leads.filter((lead) => !STOPPED_STATUSES.includes(lead.status) && contactFor(lead))
+}
+
+/** The hour of the day where the campaign owner lives, so messages do not go out at 3am. */
+export function localHour(timezone: string) {
+  try {
+    return Number(new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hour12: false }).format(new Date()))
+  } catch {
+    return new Date().getHours()
+  }
+}
+
+/** True while the campaign is inside the hours its owner chose. */
+export const inSendingWindow = (campaign: Campaign) => {
+  const hour = localHour(campaign.timezone)
+  return hour >= campaign.sendFrom && hour < campaign.sendTo
 }
 
 /**
  * Turns leads + steps into dated messages. Day 1 is due straight away; later days
- * land at the campaign's start hour. The runner still holds everything to the
- * daily cap and the sending window.
+ * land at the campaign's start hour. The daily cap and the sending window are
+ * applied later, when the due list is read.
  */
 export function buildQueue(campaign: Campaign, steps: Step[], leads: Lead[]) {
   const now = new Date()
   const rows: Record<string, unknown>[] = []
   for (const lead of leads) {
     if (STOPPED_STATUSES.includes(lead.status)) continue
+    const recipient = contactFor(lead)
+    if (!recipient) continue
     for (const step of steps) {
-      const recipient = contactFor(lead, step.channel)
-      if (!recipient) continue
       const when = new Date(now)
       if (step.day > 1) {
         when.setDate(when.getDate() + (step.day - 1))
@@ -295,9 +271,8 @@ export function buildQueue(campaign: Campaign, steps: Step[], leads: Lead[]) {
         campaign_id: campaign.id,
         step_id: step.id,
         lead_id: lead.id,
-        channel: step.channel,
+        channel: 'whatsapp',
         recipient,
-        subject: step.subject,
         body: step.body,
         scheduled_for: when.toISOString(),
         status: 'pending',
@@ -325,7 +300,7 @@ export async function queueLeads(campaign: Campaign, steps: Step[], leads: Lead[
 export async function fetchQueue(campaignId: string): Promise<QueueItem[]> {
   const { data, error } = await supabase
     .from('outreach_queue')
-    .select('*')
+    .select(QUEUE_COLUMNS)
     .eq('campaign_id', campaignId)
     .order('scheduled_for', { ascending: true })
     .limit(2000)
@@ -333,35 +308,73 @@ export async function fetchQueue(campaignId: string): Promise<QueueItem[]> {
   return (data as QueueRow[]).map(fromQueue)
 }
 
-/** Every WhatsApp message that is due now, across all running campaigns. */
-export async function fetchWhatsappDue(): Promise<QueueItem[]> {
+/** How many messages each campaign has already sent today, in its own time zone. */
+async function sentToday(campaigns: Campaign[]): Promise<Record<string, number>> {
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  const tally: Record<string, number> = {}
+  for (const campaign of campaigns) tally[campaign.id] = 0
+
   const { data, error } = await supabase
     .from('outreach_queue')
-    .select('*')
-    .eq('channel', 'whatsapp')
+    .select('campaign_id')
+    .in('campaign_id', Object.keys(tally))
+    .eq('status', 'sent')
+    .gte('sent_at', since.toISOString())
+    .limit(5000)
+  if (error) fail(error)
+  for (const row of (data ?? []) as { campaign_id: string }[]) {
+    if (tally[row.campaign_id] !== undefined) tally[row.campaign_id] += 1
+  }
+  return tally
+}
+
+/**
+ * Every message that should be sent right now: running campaigns only, inside their
+ * sending hours, and never more than the daily cap each one allows.
+ */
+export async function fetchDue(campaigns: Campaign[]): Promise<QueueItem[]> {
+  const open = campaigns.filter((c) => c.status === 'running' && inSendingWindow(c))
+  if (open.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('outreach_queue')
+    .select(QUEUE_COLUMNS)
+    .in(
+      'campaign_id',
+      open.map((c) => c.id),
+    )
     .eq('status', 'pending')
     .lte('scheduled_for', new Date().toISOString())
     .order('scheduled_for', { ascending: true })
-    .limit(200)
+    .limit(500)
   if (error) fail(error)
-  return (data as QueueRow[]).map(fromQueue)
+
+  const already = await sentToday(open)
+  const room: Record<string, number> = {}
+  for (const campaign of open) room[campaign.id] = Math.max(0, campaign.dailyCap - (already[campaign.id] ?? 0))
+
+  const due: QueueItem[] = []
+  for (const row of (data ?? []) as QueueRow[]) {
+    if ((room[row.campaign_id] ?? 0) <= 0) continue
+    room[row.campaign_id] -= 1
+    due.push(fromQueue(row))
+  }
+  return due
 }
 
 export async function countsFor(campaignIds: string[]): Promise<Record<string, CampaignCounts>> {
   const counts: Record<string, CampaignCounts> = {}
   if (campaignIds.length === 0) return counts
-  const { data, error } = await supabase.from('outreach_queue').select('campaign_id, status, channel').in('campaign_id', campaignIds).limit(20000)
+  const { data, error } = await supabase.from('outreach_queue').select('campaign_id, status').in('campaign_id', campaignIds).limit(20000)
   if (error) fail(error)
-  for (const id of campaignIds) counts[id] = { pending: 0, sent: 0, failed: 0, waitingWhatsapp: 0 }
-  for (const row of (data ?? []) as { campaign_id: string; status: QueueStatus; channel: Channel }[]) {
+  for (const id of campaignIds) counts[id] = { pending: 0, sent: 0, skipped: 0 }
+  for (const row of (data ?? []) as { campaign_id: string; status: QueueStatus }[]) {
     const tally = counts[row.campaign_id]
     if (!tally) continue
-    if (row.status === 'pending') {
-      tally.pending += 1
-      if (row.channel === 'whatsapp') tally.waitingWhatsapp += 1
-    }
+    if (row.status === 'pending') tally.pending += 1
     if (row.status === 'sent') tally.sent += 1
-    if (row.status === 'failed') tally.failed += 1
+    if (row.status === 'skipped') tally.skipped += 1
   }
   return counts
 }
@@ -379,42 +392,17 @@ export async function cancelPending(campaignId: string) {
   if (error) fail(error)
 }
 
-export interface RunResult {
-  sent: number
-  failed: number
-  cancelled: number
-  waiting: number
-  notes: string[]
-}
-
-/** Calls the Edge Function and turns whatever went wrong into a sentence worth reading. */
-async function callRunner(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('outreach-run', { body })
-  if (error) {
-    let message = 'Could not reach the "outreach-run" function. Is it deployed in Supabase?'
-    const context = (error as { context?: Response }).context
-    if (context && typeof context.json === 'function') {
-      try {
-        const payload = await context.json()
-        if (payload?.error) message = String(payload.error)
-      } catch {
-        // keep the generic message
-      }
-    }
-    throw new Error(message)
-  }
-  if (data?.error) throw new Error(String(data.error))
-  return data
-}
-
-/** Asks the Edge Function to send whatever email is due right now. */
-export async function runNow(campaignId?: string): Promise<RunResult> {
-  return (await callRunner({ campaignId, force: true })) as RunResult
-}
-
-/** Sends one message to the owner so they can see the Gmail account really works. */
-export async function sendTestEmail(to: string) {
-  await callRunner({ testTo: to })
+/** A campaign with nothing left to send has finished. */
+export async function finishIfDone(campaignId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('outreach_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', campaignId)
+    .eq('status', 'pending')
+  if (error) fail(error)
+  if ((count ?? 0) > 0) return false
+  await setCampaignStatus(campaignId, 'done')
+  return true
 }
 
 /** Fills {{name}} and friends so the portal shows what will actually be sent. */
@@ -426,7 +414,12 @@ export function render(text: string, lead: Lead) {
     .replaceAll('{{rating}}', lead.rating === null ? '' : String(lead.rating))
     .replaceAll('{{reviews}}', lead.reviews === null ? '' : String(lead.reviews))
     .replaceAll('{{website}}', lead.website)
-    .replaceAll('{{opening}}', '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/** The exact text that goes into WhatsApp: the message, then the campaign's sign-off. */
+export function compose(body: string, lead: Lead | undefined, signature: string) {
+  const text = lead ? render(body, lead) : body.trim()
+  return signature.trim() ? `${text}\n\n${signature.trim()}` : text
 }

@@ -1,35 +1,30 @@
-Sab kuch ban gaya aur test ho gaya. Yeh raha mukammal khulasa.
+Outreach ab sirf WhatsApp se chalta hai. Email wala system poori tarah nikal diya gaya hai —
+na Gmail, na app password, na koi khud-ba-khud jane wali email.
 
-Pehle ek zaroori baat — password mujhe na bhejen
-Mujhe aap ka Gmail password ya app password kabhi nahi chahiye, aur chat mein bhejna theek nahi. Aap khud Supabase ke Secrets mein daalenge — code use wahan se uthata hai, kisi file mein likha nahi jata. WhatsApp number bhi mujhe nahi chahiye: one-click queue aap ke computer par jo WhatsApp logged-in hai, usi se bhejta hai.
-
-Aur ek wazahat: asli Gmail password kaam nahi karega — Google cold SMTP ke liye sirf App Password qabool karta hai.
-
-Aap ko kya karna hai (kul ~10 minute)
+Aap ko kya karna hai
 1. Database — Supabase → SQL Editor → New query → 20261012000000_outreach.sql paste → Run
+   (Agar pehle chala chuke hain to dobara chalane ki zaroorat nahi — purani tables waisi hi chalti hain.)
 
-2. Function — Edge Functions → Deploy a new function → naam outreach-run → index.ts ka poora code paste → Deploy
-(maine abhi is mein test-email wala hissa add kiya hai, isi waqt wali file lena)
+2. Leads — Leads page → list banayen → Enrich (phone number zaroori hai, email ki ab zaroorat nahi)
 
-3. Gmail
+3. Campaign — Outreach → New campaign
+   - naam, kaun si leads, roz kitne messages, kin ghanton mein, time zone
+   - har step ka sirf din aur message (sab WhatsApp)
+   - message ke andar {{name}} {{category}} {{city}} {{rating}} {{reviews}}
+   - sign-off har message ke aakhir mein khud lag jata hai
+   - Save and start
 
-Jis Gmail se bhejna hai us mein login → myaccount.google.com/security → 2-Step Verification on
-myaccount.google.com/apppasswords → naam "Teeju" → Create → 16 harf copy (spaces hata dein)
-Supabase → Edge Functions → Secrets → do secrets banayen: GMAIL_USER = poora email · GMAIL_APP_PASSWORD = wo 16 harf
-4. Check karen — portal → Outreach → upar Email sender card → apni email daal kar Send test dabayen.
-Sabz paighaam = Gmail jud gaya. Laal paighaam = mujhe wo laal text bata dein, main theek kar dunga.
+4. Bhejna — Outreach page par "WhatsApp — X ready to send" list aati hai
+   - Open WhatsApp → chat khulti hai, message pehle se likha hua → aap send dabate hain
+   - wapas aa kar Mark sent (ya Skip)
+   - us computer par web.whatsapp.com par apne number se logged-in rehna zaroori hai
 
-5. WhatsApp — kuch set nahi karna. Bas us computer par web.whatsapp.com par apne number se logged-in rahen.
+Kya khud ba khud hota hai
+- Messages apne din aur waqt par khud list mein aate hain
+- Roz ki had (daily cap) aur bhejne ke ghante khud lagte hain — had poori hone par list ruk jati hai
+- Jis lead ko Replied / Won / Lost / Unsubscribed mark kar dein, us ke baqi messages queue mein nahi aate
+- Sab messages nikal jane par campaign khud Finished ho jata hai
 
-6. Pehli campaign
-
-Leads page → aisi list banayen jin ki website ho (Lead Finder mein "Has website" filter) → Enrich
-Outreach → New campaign → naam, kitne roz, waqt, aap ka naam aur sign-off
-Message ke andar {{name}} {{category}} {{city}} aur {{opening}} (yeh line AI har business ke liye alag likhega)
-Save and start → email khud jayegi, WhatsApp wale messages upar queue mein aa jayenge
-7. Cron (baad mein bhi chalega) — Integrations → Cron → job 0 * * * * → outreach-run. Is ke baghair bhi sab chalta hai, bas aap "Send due email now" khud dabayenge.
-
-Shuru mein ehtiyat
-Pehle hafte 20–30 email roz, phir barhayen — warna naya Gmail spam mein chala jata hai
-WhatsApp par bhi roz 30–50 naye chats se zyada nahi, chahe manual hi ho
-Jawab aane par lead ko Replied mark karen → us ke baqi saare messages khud cancel
+Ehtiyat
+- Roz 30-50 naye chats se zyada nahi, chahe manual hi hon — warna WhatsApp number block kar deta hai
+- Jawab aane par lead ko foran Replied mark karen

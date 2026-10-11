@@ -3,54 +3,51 @@ import {
   AlertCircle,
   Check,
   ChevronDown,
+  Clock,
   Copy,
   Database,
   Loader2,
-  Mail,
   Megaphone,
+  MessageCircle,
   Pause,
   Play,
   Plus,
   RefreshCw,
   Send,
-  ShieldCheck,
   SkipForward,
   Square,
   Trash2,
   X,
 } from 'lucide-react'
-import PlatformIcon from '../components/PlatformIcon'
 import { SetupRequiredError } from '../lib/apiStore'
 import { fetchLeads, type Lead } from '../lib/leadStore'
 import {
   cancelPending,
-  contactFor,
+  compose,
   countsFor,
   defaultSteps,
   deleteCampaign,
   fetchCampaigns,
+  fetchDue,
   fetchQueue,
   fetchSteps,
-  fetchWhatsappDue,
+  finishIfDone,
+  inSendingWindow,
   markQueueItem,
   newCampaign,
   queueLeads,
   reachable,
-  render,
-  runNow,
   saveCampaign,
-  sendTestEmail,
   setCampaignStatus,
   type Campaign,
   type CampaignCounts,
-  type Channel,
   type QueueItem,
   type Step,
 } from '../lib/outreach'
 import setupSql from '../../supabase/migrations/20261012000000_outreach.sql?raw'
 import './Outreach.css'
 
-const TOKENS = ['{{name}}', '{{category}}', '{{city}}', '{{rating}}', '{{reviews}}', '{{opening}}']
+const TOKENS = ['{{name}}', '{{category}}', '{{city}}', '{{rating}}', '{{reviews}}']
 
 const STATUS_LABEL: Record<Campaign['status'], string> = {
   draft: 'Draft',
@@ -111,7 +108,7 @@ export default function Outreach() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [counts, setCounts] = useState<Record<string, CampaignCounts>>({})
   const [leads, setLeads] = useState<Lead[]>([])
-  const [waDue, setWaDue] = useState<QueueItem[]>([])
+  const [due, setDue] = useState<QueueItem[]>([])
   const [opened, setOpened] = useState<Set<string>>(new Set())
 
   const [loading, setLoading] = useState(true)
@@ -121,24 +118,16 @@ export default function Outreach() {
 
   const [editing, setEditing] = useState<{ campaign: Campaign; steps: Step[] } | null>(null)
   const [openId, setOpenId] = useState('')
-  const [testTo, setTestTo] = useState(() => {
-    try {
-      return localStorage.getItem('teeju-test-email') ?? ''
-    } catch {
-      return ''
-    }
-  })
-  const [testResult, setTestResult] = useState('')
   const [queue, setQueue] = useState<QueueItem[]>([])
   const editorRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [list, allLeads, due] = await Promise.all([fetchCampaigns(), fetchLeads(), fetchWhatsappDue()])
+      const [list, allLeads] = await Promise.all([fetchCampaigns(), fetchLeads()])
       setCampaigns(list)
       setLeads(allLeads)
-      setWaDue(due)
+      setDue(await fetchDue(list))
       setCounts(await countsFor(list.map((c) => c.id)))
       setSetupRequired(false)
     } catch (err) {
@@ -154,6 +143,7 @@ export default function Outreach() {
   }, [load])
 
   const leadById = useMemo(() => new Map(leads.map((lead) => [lead.id, lead])), [leads])
+  const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns])
   const sources = useMemo(() => [...new Set(leads.map((l) => l.source).filter(Boolean))], [leads])
 
   const totals = useMemo(() => {
@@ -162,21 +152,22 @@ export default function Outreach() {
       running: campaigns.filter((c) => c.status === 'running').length,
       sent: all.reduce((sum, c) => sum + c.sent, 0),
       pending: all.reduce((sum, c) => sum + c.pending, 0),
-      whatsapp: waDue.length,
+      due: due.length,
     }
-  }, [campaigns, counts, waDue])
+  }, [campaigns, counts, due])
 
-  /** The leads this draft would actually reach, and how. */
+  /** The leads this draft would actually reach. */
   const audience = useMemo(() => {
-    if (!editing) return { all: [] as Lead[], email: 0, whatsapp: 0 }
+    if (!editing) return [] as Lead[]
     const pool = editing.campaign.source ? leads.filter((l) => l.source === editing.campaign.source) : leads
-    const all = reachable(pool, editing.steps)
-    return {
-      all,
-      email: all.filter((l) => contactFor(l, 'email')).length,
-      whatsapp: all.filter((l) => contactFor(l, 'whatsapp')).length,
-    }
+    return reachable(pool)
   }, [editing, leads])
+
+  /** Running campaigns that have messages waiting but are outside their hours. */
+  const resting = useMemo(
+    () => campaigns.filter((c) => c.status === 'running' && !inSendingWindow(c) && (counts[c.id]?.pending ?? 0) > 0),
+    [campaigns, counts],
+  )
 
   /* ---------- Editing ---------- */
 
@@ -211,10 +202,7 @@ export default function Outreach() {
         id: crypto.randomUUID(),
         campaignId: e.campaign.id,
         day: Math.min((last?.day ?? 0) + 2, 90),
-        channel: last?.channel === 'email' ? 'whatsapp' : 'email',
-        subject: '',
         body: '',
-        personalise: true,
       }
       return { ...e, steps: [...e.steps, step] }
     })
@@ -235,8 +223,8 @@ export default function Outreach() {
       setNote({ kind: 'error', text: 'One of the messages is empty.' })
       return
     }
-    if (andStart && audience.all.length === 0) {
-      setNote({ kind: 'error', text: 'None of these leads has an email or a phone number — enrich them first.' })
+    if (andStart && audience.length === 0) {
+      setNote({ kind: 'error', text: 'None of these leads has a phone number — enrich them first.' })
       return
     }
     setBusy('save')
@@ -244,14 +232,14 @@ export default function Outreach() {
       await saveCampaign(campaign, steps)
       let queued = 0
       if (andStart) {
-        queued = await queueLeads(campaign, steps, audience.all)
+        queued = await queueLeads(campaign, steps, audience)
         await setCampaignStatus(campaign.id, 'running')
       }
       await load()
       setEditing(null)
       setNote({
         kind: 'ok',
-        text: andStart ? `Campaign started — ${queued} message${queued === 1 ? '' : 's'} queued for ${audience.all.length} leads.` : 'Campaign saved as a draft.',
+        text: andStart ? `Campaign started — ${queued} message${queued === 1 ? '' : 's'} queued for ${audience.length} leads.` : 'Campaign saved as a draft.',
       })
     } catch (err) {
       setNote({ kind: 'error', text: err instanceof Error ? err.message : 'Could not save the campaign.' })
@@ -268,7 +256,7 @@ export default function Outreach() {
       // A draft or a finished campaign may have new leads waiting since last time.
       const steps = await fetchSteps(campaign.id)
       const pool = campaign.source ? leads.filter((l) => l.source === campaign.source) : leads
-      const added = await queueLeads(campaign, steps, reachable(pool, steps))
+      const added = await queueLeads(campaign, steps, reachable(pool))
       await setCampaignStatus(campaign.id, 'running')
       await load()
       setNote({ kind: 'ok', text: added > 0 ? `Running — ${added} new message${added === 1 ? '' : 's'} queued.` : 'Campaign is running.' })
@@ -283,7 +271,7 @@ export default function Outreach() {
     try {
       await setCampaignStatus(campaign.id, 'paused')
       await load()
-      setNote({ kind: 'ok', text: 'Paused. Nothing more will be sent until you start it again.' })
+      setNote({ kind: 'ok', text: 'Paused. Nothing more will come up for sending until you start it again.' })
     } catch (err) {
       setNote({ kind: 'error', text: err instanceof Error ? err.message : 'Could not pause that campaign.' })
     }
@@ -313,24 +301,6 @@ export default function Outreach() {
     }
   }
 
-  async function sendDue(campaignId?: string) {
-    setBusy('run')
-    setNote(null)
-    try {
-      const result = await runNow(campaignId)
-      await load()
-      const extra = result.waiting > 0 ? ` ${result.waiting} campaign${result.waiting === 1 ? '' : 's'} are outside their sending window or at today's cap.` : ''
-      setNote({
-        kind: result.failed > 0 ? 'error' : 'ok',
-        text: `${result.sent} email${result.sent === 1 ? '' : 's'} sent, ${result.failed} failed.${extra}${result.notes?.length ? ` ${result.notes[0]}` : ''}`,
-      })
-    } catch (err) {
-      setNote({ kind: 'error', text: err instanceof Error ? err.message : 'The run failed.' })
-    } finally {
-      setBusy('')
-    }
-  }
-
   async function openDetail(campaign: Campaign) {
     if (openId === campaign.id) {
       setOpenId('')
@@ -344,38 +314,19 @@ export default function Outreach() {
     }
   }
 
-  async function testEmail() {
-    if (!testTo.trim()) return
-    setBusy('test')
-    setTestResult('')
-    try {
-      await sendTestEmail(testTo.trim())
-      try {
-        localStorage.setItem('teeju-test-email', testTo.trim())
-      } catch {
-        // private browsing can block storage
-      }
-      setTestResult(`Sent. Check ${testTo.trim()} — if it is not there in a minute, look in spam.`)
-    } catch (err) {
-      setTestResult(err instanceof Error ? err.message : 'The test email failed.')
-    } finally {
-      setBusy('')
-    }
-  }
-
   /* ---------- WhatsApp one-click ---------- */
 
+  const textFor = (item: QueueItem) => compose(item.body, leadById.get(item.leadId), campaignById.get(item.campaignId)?.signature ?? '')
+
   function openWhatsapp(item: QueueItem) {
-    const lead = leadById.get(item.leadId)
-    const text = lead ? render(item.body, lead) : item.body
-    window.open(`https://wa.me/${item.recipient}?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+    window.open(`https://wa.me/${item.recipient}?text=${encodeURIComponent(textFor(item))}`, '_blank', 'noopener')
     setOpened((set) => new Set(set).add(item.id))
   }
 
-  async function markWhatsapp(item: QueueItem, status: 'sent' | 'skipped') {
+  async function markSent(item: QueueItem, status: 'sent' | 'skipped') {
     try {
       await markQueueItem(item.id, status)
-      setWaDue((list) => list.filter((q) => q.id !== item.id))
+      setDue((list) => list.filter((q) => q.id !== item.id))
       setCounts((all) => {
         const tally = all[item.campaignId]
         if (!tally) return all
@@ -384,11 +335,15 @@ export default function Outreach() {
           [item.campaignId]: {
             ...tally,
             pending: Math.max(0, tally.pending - 1),
-            waitingWhatsapp: Math.max(0, tally.waitingWhatsapp - 1),
             sent: status === 'sent' ? tally.sent + 1 : tally.sent,
+            skipped: status === 'skipped' ? tally.skipped + 1 : tally.skipped,
           },
         }
       })
+      // The campaign may have just run out of messages.
+      if (await finishIfDone(item.campaignId)) {
+        setCampaigns((list) => list.map((c) => (c.id === item.campaignId ? { ...c, status: 'done' } : c)))
+      }
     } catch (err) {
       setNote({ kind: 'error', text: err instanceof Error ? err.message : 'Could not update that message.' })
     }
@@ -418,11 +373,11 @@ export default function Outreach() {
           <h1>
             <em>Campaigns</em>
           </h1>
-          <p className="page-head__sub">Email goes out on its own. WhatsApp waits here for one click.</p>
+          <p className="page-head__sub">Every message waits here for one click, and goes out from your own WhatsApp.</p>
         </div>
         <div className="inv-actions">
-          <button type="button" className="btn btn--secondary" onClick={() => void sendDue()} disabled={busy === 'run'}>
-            {busy === 'run' ? <Loader2 size={16} className="spin" /> : <Send size={16} />} Send due email now
+          <button type="button" className="btn btn--secondary" onClick={() => void load()} disabled={loading}>
+            {loading ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />} Refresh
           </button>
           <button type="button" className="btn btn--primary" onClick={startNew}>
             <Plus size={16} /> New campaign
@@ -444,8 +399,8 @@ export default function Outreach() {
         {[
           { label: 'Running', value: totals.running, icon: Megaphone },
           { label: 'Sent', value: totals.sent, icon: Check },
-          { label: 'Waiting', value: totals.pending, icon: Mail },
-          { label: 'WhatsApp due', value: totals.whatsapp, icon: Send },
+          { label: 'Waiting', value: totals.pending, icon: Clock },
+          { label: 'Ready now', value: totals.due, icon: Send },
         ].map((tile) => (
           <article key={tile.label} className="card soc-tile">
             <span className="soc-tile__icon">
@@ -459,50 +414,28 @@ export default function Outreach() {
         ))}
       </section>
 
-      <section className="card out-check">
-        <div className="out-check__body">
-          <h2 className="card__title">Email sender</h2>
-          <p className="card__sub">
-            Campaigns send from the Gmail account in your <code>GMAIL_USER</code> and <code>GMAIL_APP_PASSWORD</code> secrets. Send yourself one test
-            message to be sure it works.
-          </p>
-          {testResult && <p className={`out-check__result${/sent\./i.test(testResult) ? ' is-ok' : ''}`}>{testResult}</p>}
-        </div>
-        <div className="out-check__form">
-          <input
-            className="api-input"
-            type="email"
-            value={testTo}
-            onChange={(e) => setTestTo(e.target.value)}
-            placeholder="your own email address"
-            aria-label="Address for the test email"
-          />
-          <button type="button" className="btn btn--secondary" onClick={() => void testEmail()} disabled={busy === 'test' || !testTo.trim()}>
-            {busy === 'test' ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />} Send test
-          </button>
-        </div>
-      </section>
-
-      {waDue.length > 0 && (
+      {due.length > 0 && (
         <section className="card out-wa">
           <header className="card__head">
             <div>
-              <h2 className="card__title">WhatsApp — {waDue.length} ready to send</h2>
-              <p className="card__sub">Open the chat, press send in WhatsApp, then mark it here. Nothing is sent without you.</p>
+              <h2 className="card__title">WhatsApp — {due.length} ready to send</h2>
+              <p className="card__sub">
+                Open the chat, press send in WhatsApp, then mark it here. Nothing is sent without you — stay logged in at web.whatsapp.com on this computer.
+              </p>
             </div>
           </header>
           <ul className="out-wa__list">
-            {waDue.slice(0, 25).map((item) => {
+            {due.slice(0, 25).map((item) => {
               const lead = leadById.get(item.leadId)
               return (
                 <li key={item.id} className="out-wa__item">
                   <div className="out-wa__who">
                     <strong>{lead?.name || 'Lead'}</strong>
                     <span className="lead-sub">
-                      <PlatformIcon id="telegram" size={12} /> +{item.recipient}
+                      <MessageCircle size={12} /> +{item.recipient}
                     </span>
                   </div>
-                  <p className="out-wa__text">{lead ? render(item.body, lead) : item.body}</p>
+                  <p className="out-wa__text">{textFor(item)}</p>
                   <div className="out-wa__actions">
                     <button type="button" className={`btn btn--sm ${opened.has(item.id) ? 'btn--secondary' : 'btn--primary'}`} onClick={() => openWhatsapp(item)}>
                       <Send size={14} /> Open WhatsApp
@@ -510,11 +443,11 @@ export default function Outreach() {
                     <button
                       type="button"
                       className={`btn btn--sm ${opened.has(item.id) ? 'btn--primary' : 'btn--secondary'}`}
-                      onClick={() => void markWhatsapp(item, 'sent')}
+                      onClick={() => void markSent(item, 'sent')}
                     >
                       <Check size={14} /> Mark sent
                     </button>
-                    <button type="button" className="api-icon-btn" title="Skip this one" onClick={() => void markWhatsapp(item, 'skipped')}>
+                    <button type="button" className="api-icon-btn" title="Skip this one" onClick={() => void markSent(item, 'skipped')}>
                       <SkipForward size={15} />
                     </button>
                   </div>
@@ -522,8 +455,18 @@ export default function Outreach() {
               )
             })}
           </ul>
-          {waDue.length > 25 && <p className="api-hint out-more">Showing the first 25 — the rest stay queued.</p>}
+          {due.length > 25 && <p className="api-hint out-more">Showing the first 25 — the rest stay queued.</p>}
         </section>
+      )}
+
+      {due.length === 0 && resting.length > 0 && (
+        <div className="alert api-banner" role="status">
+          <Clock size={16} />
+          <span>
+            Nothing to send right now — {resting.length === 1 ? `"${resting[0].name}" is` : `${resting.length} campaigns are`} outside their sending hours or
+            already at today's limit.
+          </span>
+        </div>
       )}
 
       {editing && (
@@ -532,7 +475,7 @@ export default function Outreach() {
             <div>
               <h2 className="card__title">{campaigns.some((c) => c.id === editing.campaign.id) ? 'Edit campaign' : 'New campaign'}</h2>
               <p className="card__sub">
-                {audience.all.length} lead{audience.all.length === 1 ? '' : 's'} can be reached — {audience.email} by email, {audience.whatsapp} on WhatsApp
+                {audience.length} lead{audience.length === 1 ? '' : 's'} have a WhatsApp number and can be reached
               </p>
             </div>
             <button type="button" className="api-icon-btn" onClick={() => setEditing(null)} aria-label="Close editor">
@@ -557,11 +500,7 @@ export default function Outreach() {
               </select>
             </label>
             <label className="out-field">
-              <span>Your name (shown as the sender)</span>
-              <input className="api-input" value={editing.campaign.fromName} onChange={(e) => patch({ fromName: e.target.value })} placeholder="e.g. Sara from Teeju" />
-            </label>
-            <label className="out-field">
-              <span>Emails per day</span>
+              <span>Messages per day</span>
               <input
                 className="api-input"
                 type="number"
@@ -598,7 +537,7 @@ export default function Outreach() {
           </div>
 
           <label className="out-field out-field--wide">
-            <span>Sign-off added to every email</span>
+            <span>Sign-off added to every message</span>
             <textarea
               className="api-input"
               rows={2}
@@ -624,10 +563,9 @@ export default function Outreach() {
                       onChange={(e) => patchStep(step.id, { day: Math.min(90, Math.max(1, Number(e.target.value) || 1)) })}
                     />
                   </label>
-                  <select className="api-input out-step__channel" value={step.channel} onChange={(e) => patchStep(step.id, { channel: e.target.value as Channel })}>
-                    <option value="email">Email</option>
-                    <option value="whatsapp">WhatsApp</option>
-                  </select>
+                  <span className="out-step__channel">
+                    <MessageCircle size={13} /> WhatsApp
+                  </span>
                   <button
                     type="button"
                     className="api-icon-btn"
@@ -637,17 +575,13 @@ export default function Outreach() {
                     <Trash2 size={15} />
                   </button>
                 </header>
-                {step.channel === 'email' && (
-                  <input className="api-input" value={step.subject} onChange={(e) => patchStep(step.id, { subject: e.target.value })} placeholder="Subject line" />
-                )}
                 <textarea className="api-input out-step__body" rows={6} value={step.body} onChange={(e) => patchStep(step.id, { body: e.target.value })} />
-                {audience.all[0] && (
+                {audience[0] && (
                   <details className="out-preview">
                     <summary>
-                      <ChevronDown size={14} /> Preview for {audience.all[0].name}
+                      <ChevronDown size={14} /> Preview for {audience[0].name}
                     </summary>
-                    {step.channel === 'email' && step.subject && <p className="out-preview__subject">{render(step.subject, audience.all[0])}</p>}
-                    <p className="out-preview__body">{render(step.body, audience.all[0])}</p>
+                    <p className="out-preview__body">{compose(step.body, audience[0], editing.campaign.signature)}</p>
                   </details>
                 )}
               </article>
@@ -657,9 +591,7 @@ export default function Outreach() {
             </button>
           </div>
 
-          <p className="api-hint">
-            Use {TOKENS.join(' ')} inside a message. <strong>{'{{opening}}'}</strong> is written fresh by the AI for each business — email only.
-          </p>
+          <p className="api-hint">Use {TOKENS.join(' ')} inside a message — each one is filled in with that lead's own details.</p>
 
           <div className="soc-actions">
             <button type="button" className="btn btn--primary" onClick={() => void save(true)} disabled={busy === 'save'}>
@@ -687,16 +619,16 @@ export default function Outreach() {
             </span>
             <h2>No campaigns yet</h2>
             <p>
-              A campaign takes your enriched leads and works through them over a few days — email on its own, WhatsApp with one click. Set the{' '}
-              <code>GMAIL_USER</code> and <code>GMAIL_APP_PASSWORD</code> secrets in Supabase before the first email goes out.
+              A campaign takes your enriched leads and works through them over a few days. Each WhatsApp message comes up here at its turn, you press send, and
+              a lead that replies is dropped from the rest of the sequence.
             </p>
           </div>
         </section>
       ) : (
         <section className="out-list">
           {campaigns.map((campaign) => {
-            const tally = counts[campaign.id] ?? { pending: 0, sent: 0, failed: 0, waitingWhatsapp: 0 }
-            const total = tally.pending + tally.sent + tally.failed
+            const tally = counts[campaign.id] ?? { pending: 0, sent: 0, skipped: 0 }
+            const total = tally.pending + tally.sent + tally.skipped
             return (
               <article key={campaign.id} className={`card out-card is-${campaign.status}`}>
                 <header className="out-card__head">
@@ -716,14 +648,9 @@ export default function Outreach() {
                   <span>
                     <strong>{tally.pending}</strong> waiting
                   </span>
-                  {tally.waitingWhatsapp > 0 && (
+                  {tally.skipped > 0 && (
                     <span>
-                      <strong>{tally.waitingWhatsapp}</strong> on WhatsApp
-                    </span>
-                  )}
-                  {tally.failed > 0 && (
-                    <span className="out-numbers__bad">
-                      <strong>{tally.failed}</strong> failed
+                      <strong>{tally.skipped}</strong> skipped
                     </span>
                   )}
                 </div>
@@ -763,7 +690,6 @@ export default function Outreach() {
                       <thead>
                         <tr>
                           <th>Lead</th>
-                          <th>Channel</th>
                           <th>To</th>
                           <th>When</th>
                           <th>Status</th>
@@ -773,8 +699,7 @@ export default function Outreach() {
                         {queue.slice(0, 100).map((item) => (
                           <tr key={item.id}>
                             <td>{leadById.get(item.leadId)?.name || '—'}</td>
-                            <td>{item.channel === 'email' ? 'Email' : 'WhatsApp'}</td>
-                            <td className="out-queue__to">{item.recipient}</td>
+                            <td className="out-queue__to">+{item.recipient}</td>
                             <td className="table__muted">{new Date(item.sentAt ?? item.scheduledFor).toLocaleString()}</td>
                             <td>
                               <span className={`out-dot out-dot--${item.status}`} /> {item.status}

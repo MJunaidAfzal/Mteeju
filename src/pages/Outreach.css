@@ -97,7 +97,11 @@
 }
 
 .out-step__channel {
-  width: 130px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-700);
 }
 
 .out-step__head .api-icon-btn {
@@ -144,41 +148,6 @@
 
 .out-add {
   justify-self: start;
-}
-
-/* ---------- Email sender check ---------- */
-.out-check {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.out-check__body {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-
-.out-check__form {
-  display: flex;
-  flex: 0 1 380px;
-  gap: 8px;
-}
-
-.out-check__form .api-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.out-check__result {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: var(--maroon-700);
-}
-
-.out-check__result.is-ok {
-  color: var(--green-700);
 }
 
 /* ---------- WhatsApp queue ---------- */
@@ -370,9 +339,5 @@
 
   .out-wa__actions {
     flex-wrap: wrap;
-  }
-
-  .out-step__channel {
-    width: 100%;
   }
 }

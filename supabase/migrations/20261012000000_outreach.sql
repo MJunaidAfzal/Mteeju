@@ -1,4 +1,4 @@
--- Teeju: outreach campaigns — the steps they send and the queue of messages.
+-- Teeju: outreach campaigns — the steps they send and the queue of WhatsApp messages.
 -- Run once in Supabase → SQL Editor. Safe to run again.
 
 -- A campaign picks a set of leads and walks them through its steps over a number of days.
@@ -10,8 +10,7 @@ create table if not exists public.campaigns (
     check (status in ('draft', 'running', 'paused', 'done')),
   -- which leads take part: '' means every file / any status
   source text not null default '',
-  -- how the sender signs off
-  from_name text not null default '',
+  -- how the sender signs off at the end of every message
   signature text not null default '',
   -- pacing
   daily_cap integer not null default 25 check (daily_cap between 1 and 500),
@@ -30,24 +29,23 @@ create table if not exists public.campaign_steps (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   campaign_id uuid not null references public.campaigns (id) on delete cascade,
   day integer not null default 1 check (day between 1 and 90),
-  channel text not null default 'email' check (channel in ('email', 'whatsapp')),
+  channel text not null default 'whatsapp' check (channel in ('email', 'whatsapp')),
   subject text not null default '',
   body text not null default '',
-  -- let the AI rewrite the opening line for each business
   personalise boolean not null default true,
   created_at timestamptz not null default now()
 );
 
--- Every message the campaign owes a lead. Email rows are sent by the runner,
--- WhatsApp rows wait in the portal for a one-click send.
+-- Every message the campaign owes a lead. Each one waits in the portal until the
+-- owner sends it from their own WhatsApp with one click.
 create table if not exists public.outreach_queue (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   campaign_id uuid not null references public.campaigns (id) on delete cascade,
   step_id uuid not null references public.campaign_steps (id) on delete cascade,
   lead_id uuid not null references public.leads (id) on delete cascade,
-  channel text not null check (channel in ('email', 'whatsapp')),
-  -- email address or phone number this message goes to
+  channel text not null default 'whatsapp' check (channel in ('email', 'whatsapp')),
+  -- the WhatsApp number this message goes to
   recipient text not null default '',
   subject text not null default '',
   body text not null default '',
