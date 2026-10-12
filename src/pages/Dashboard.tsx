@@ -194,7 +194,7 @@ export default function Dashboard({ session }: { session: Session }) {
           ) : active === 'outreach' ? (
             <Outreach />
           ) : (
-            <Overview name={name} />
+            <Overview name={name} onNavigate={go} />
           )}
         </main>
 
